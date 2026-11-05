@@ -190,7 +190,8 @@ begin
   Result := E_NOTIMPL;
 end;
 
-{ Spaete Bindung: DISPID 1 = OnConnection, 2 = OnDisconnection, 3..5 ohne Funktion.
+{ Spaete Bindung: DISPID 1 = OnConnection, 2 = OnDisconnection, 5 = OnBeginShutdown,
+  3 und 4 ohne Funktion.
   Argumente liegen in umgekehrter Reihenfolge vor. }
 function TVbaSyncConnect.Invoke(DispID: Integer; const IID: TGUID; LocaleID: Integer;
   Flags: Word; var Params; VarResult, ExcepInfo, ArgErr: Pointer): HResult;
@@ -208,7 +209,7 @@ begin
           V := POleVariant(@DP.rgvarg^[DP.cArgs - 1])^;
           DoConnect(IUnknown(V) as IDispatch);
         end;
-      2:
+      2, 5: // OnDisconnection, OnBeginShutdown
         DoDisconnect;
     end;
   except
@@ -237,6 +238,9 @@ end;
 
 procedure TVbaSyncConnect.OnBeginShutdown(var custom: PSafeArray);
 begin
+  // Beim Beenden alle Referenzen auf VBE-Objekte sofort freigeben, damit
+  // Excel nicht als Hintergrundprozess haengen bleibt.
+  DoDisconnect;
 end;
 
 procedure TVbaSyncConnect.DoConnect(const App: IDispatch);

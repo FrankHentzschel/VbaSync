@@ -2,6 +2,9 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.6.1 – 05.11.2026 23:55
+- Fix Add-in: gibt beim Beenden von Excel (`OnBeginShutdown`) Menü, Ereignis und VBE-Referenz sofort frei (Versuch gegen hängenden Excel-Prozess)
+
 ## 1.6.0 – 05.11.2026 23:45
 - Add-in: Menüpunkt „VbaSync...“ steht links vom Menü „Fenster“ statt ganz rechts
 - Fenster: alle Schaltflächen (auch Aktualisieren/Durchsuchen) gleich breit; die Breite richtet sich nach der längsten Beschriftung in der aktuellen Schrift und DPI
