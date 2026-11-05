@@ -1,0 +1,4 @@
+*.pas text eol=crlf
+*.dpr text eol=crlf
+*.dproj text eol=crlf
+*.md text eol=lf

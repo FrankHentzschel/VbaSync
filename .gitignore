@@ -1,0 +1,13 @@
+# Delphi
+__history/
+__recovery/
+*.dcu
+*.exe
+*.dll
+*.local
+*.identcache
+*.dsk
+*.res
+*.stat
+Win32/
+Win64/
