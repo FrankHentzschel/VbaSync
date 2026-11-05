@@ -191,6 +191,7 @@ begin
   lvComps.RowSelect := True;
   lvComps.ReadOnly := True;
   lvComps.HideSelection := False;
+  lvComps.MultiSelect := True; // Shift/Strg-Mehrfachauswahl
   Col := lvComps.Columns.Add; Col.Caption := 'Name';   Col.Width := 300;
   Col := lvComps.Columns.Add; Col.Caption := 'Typ';    Col.Width := 120;
   Col := lvComps.Columns.Add; Col.Caption := 'Zeilen'; Col.Width := 80;
@@ -303,10 +304,15 @@ function TMainForm.CheckedNames: TArray<string>;
 var
   I: Integer;
 begin
+  // Haekchen haben Vorrang; ohne Haekchen zaehlt die Auswahl (Shift/Strg + Klick).
   Result := nil;
   for I := 0 to lvComps.Items.Count - 1 do
     if lvComps.Items[I].Checked then
       Result := Result + [lvComps.Items[I].Caption];
+  if Length(Result) = 0 then
+    for I := 0 to lvComps.Items.Count - 1 do
+      if lvComps.Items[I].Selected then
+        Result := Result + [lvComps.Items[I].Caption];
 end;
 
 function TMainForm.RequireFolder: string;
@@ -415,10 +421,10 @@ begin
   Names := CheckedNames;
   if Length(Names) = 0 then
   begin
-    MessageDlg('Keine Komponente markiert.', mtInformation, [mbOK], 0);
+    MessageDlg('Keine Komponente markiert oder ausgewaehlt.', mtInformation, [mbOK], 0);
     Exit;
   end;
-  if not Confirm(Format('%d markierte Komponente(n) aus dem Ordner neu importieren?', [Length(Names)])) then Exit;
+  if not Confirm(Format('%d Komponente(n) aus dem Ordner neu importieren?', [Length(Names)]) + sLineBreak + sLineBreak + String.Join(', ', Names)) then Exit;
   RunAction(
     procedure(S: TVbaSync)
     begin
@@ -434,11 +440,11 @@ begin
   Names := CheckedNames;
   if Length(Names) = 0 then
   begin
-    MessageDlg('Keine Komponente markiert.', mtInformation, [mbOK], 0);
+    MessageDlg('Keine Komponente markiert oder ausgewaehlt.', mtInformation, [mbOK], 0);
     Exit;
   end;
   ClearDocs := chkClearDocs.Checked;
-  if not Confirm(Format('%d markierte Komponente(n) loeschen?', [Length(Names)])) then Exit;
+  if not Confirm(Format('%d Komponente(n) loeschen?', [Length(Names)]) + sLineBreak + sLineBreak + String.Join(', ', Names)) then Exit;
   RunAction(
     procedure(S: TVbaSync)
     begin
