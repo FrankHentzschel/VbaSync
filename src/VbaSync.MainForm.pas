@@ -17,6 +17,8 @@ type
   TMainForm = class(TForm)
   private
     FWorkbooks: TArray<OleVariant>;
+    FOwnerWnd: HWND;       // Add-in: Fenster der VBA-IDE als Besitzer
+    FPreferred: string;    // Add-in: Pfad der aktiven Mappe vorauswaehlen
     FFullNames: TStringList;
     cbWorkbook: TComboBox;
     btnRefresh: TButton;
@@ -53,6 +55,8 @@ type
     procedure CreateParams(var Params: TCreateParams); override;
   public
     constructor Create(AOwner: TComponent); override;
+    /// Aufruf aus dem VBE-Add-in: Besitzerfenster und vorzuwaehlende Mappe
+    constructor CreateForAddin(AOwnerWnd: HWND; const APreferredFullName: string);
     destructor Destroy; override;
   end;
 
@@ -78,8 +82,13 @@ begin
   // Eigenstaendiges Top-Level-Fenster: erscheint in Alt+Tab und in der Taskleiste.
   // (Das Fenster wird schon im Konstruktor erzeugt, bevor Application.MainForm
   //  gesetzt ist; dadurch griff MainFormOnTaskbar nicht.)
-  Params.ExStyle := Params.ExStyle or WS_EX_APPWINDOW;
-  Params.WndParent := 0;
+  if FOwnerWnd <> HWND(0) then
+    Params.WndParent := FOwnerWnd  // im Add-in: ueber der VBA-IDE
+  else
+  begin
+    Params.ExStyle := Params.ExStyle or WS_EX_APPWINDOW;
+    Params.WndParent := 0;
+  end;
 end;
 
 procedure TMainForm.ApplyAppIcon;
@@ -98,6 +107,13 @@ begin
   if H = HICON(0) then Exit;
   Icon.Handle := H;
   Application.Icon.Handle := Load(GetSystemMetrics(SM_CXICON));
+end;
+
+constructor TMainForm.CreateForAddin(AOwnerWnd: HWND; const APreferredFullName: string);
+begin
+  FOwnerWnd := AOwnerWnd;
+  FPreferred := APreferredFullName;
+  Create(nil);
 end;
 
 constructor TMainForm.Create(AOwner: TComponent);
@@ -330,7 +346,9 @@ var
   Prev: string;
 begin
   if cbWorkbook.ItemIndex >= 0 then
-    Prev := FFullNames[cbWorkbook.ItemIndex];
+    Prev := FFullNames[cbWorkbook.ItemIndex]
+  else
+    Prev := FPreferred;
   cbWorkbook.Items.Clear;
   FFullNames.Clear;
   lvComps.Items.Clear;

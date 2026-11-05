@@ -2,6 +2,11 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.5.0 – 05.11.2026 11:05
+- Neu: VBE-Add-in `VbaSyncAddin.dll` (Win32) mit Menüeintrag „VbaSync...“ in der VBA-IDE; öffnet das VbaSync-Fenster mit der aktiven Mappe vorausgewählt
+- Registrierung pro Benutzer per `regsvr32`, ohne Administratorrechte
+- Delphi-Projektdateien (`.dproj`) im Repository
+
 ## 1.4.3 – 05.11.2026 10:45
 - Fix: Hauptfenster erscheint in Alt+Tab und in der Taskleiste
 

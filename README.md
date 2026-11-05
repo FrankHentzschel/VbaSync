@@ -16,6 +16,18 @@ Ein VBE-Add-in mit Menü in der VBA-IDE folgt und nutzt dieselbe Unit.
 ## Voraussetzung in Excel
 Trust Center → Makroeinstellungen → **„Zugriff auf das VBA-Projektobjektmodell vertrauen“**.
 
+## VBE-Add-in (Menü in der VBA-IDE)
+1. `src/VbaSyncAddin.dpr` in Delphi öffnen und als **Win32** bauen (passend zu 32-Bit-Office; für 64-Bit-Office Win64).
+2. Excel schließen. In einer Eingabeaufforderung (ohne Administrator):
+   ```
+   regsvr32 C:\Work\VbaSync\src\Win32\Debug\VbaSyncAddin.dll
+   ```
+   Der Pfad hängt von deiner Ausgabe-Einstellung ab. Die DLL nach dem Registrieren nicht verschieben.
+3. Excel starten, VBA-Editor öffnen (Alt+F11). In der Menüleiste erscheint **VbaSync...**. Unter Add-Ins → Add-In-Manager ist „VbaSync“ gelistet.
+4. Entfernen: `regsvr32 /u <Pfad>\VbaSyncAddin.dll`.
+
+Hinweis: Während Excel läuft, ist die DLL gesperrt. Zum Neubauen Excel schließen.
+
 ## GUI
 Excel starten, Mappe öffnen, `vbasyncgui.exe` starten. Oben Mappe wählen (Vorschlag für den Ordner: `src` neben der Mappe), rechts die Aktionen. „Markierte …“ bezieht sich auf die Häkchen in der Liste. Löschen, Import und Clean fragen vorher nach.
 
