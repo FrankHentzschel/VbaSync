@@ -240,6 +240,10 @@ procedure TVbaSyncConnect.DoConnect(const App: IDispatch);
 begin
   if not VarIsEmpty(FVBE) then
     Exit; // schon verbunden
+  // Die VBE-Add-in-Registrierung gilt fuer alle Office-Programme (Excel, Access,
+  // Word ...). VbaSync arbeitet nur mit Excel-Mappen -> in anderen Hosts nichts tun.
+  if not SameText(ExtractFileName(GetModuleName(0)), 'EXCEL.EXE') then
+    Exit;
   FVBE := App; // Application ist hier das VBE-Objekt
   try
     CreateMenu;

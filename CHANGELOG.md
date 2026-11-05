@@ -2,6 +2,9 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.5.4 – 05.11.2026 11:20
+- Add-in wird nur in Excel aktiv; in Access, Word usw. legt es kein Menü an
+
 ## 1.5.3 – 05.11.2026 11:20
 - Fix Add-in: Klick-Ereignis über `FindConnectionPoint` mit der IID aus der VBIDE-Typbibliothek abonnieren (Aufzählen schlug mit E_OUTOFMEMORY fehl)
 
