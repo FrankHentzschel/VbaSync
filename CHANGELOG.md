@@ -2,6 +2,11 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.6.0 – 05.11.2026 23:45
+- Add-in: Menüpunkt „VbaSync...“ steht links vom Menü „Fenster“ statt ganz rechts
+- Fenster: alle Schaltflächen (auch Aktualisieren/Durchsuchen) gleich breit; die Breite richtet sich nach der längsten Beschriftung in der aktuellen Schrift und DPI
+- Info-Button direkt unter „Clean“ statt am unteren Fensterrand
+
 ## 1.5.6 – 05.11.2026 23:25
 - Fix Add-in: Zugriffsverletzung bei `Advise`; `QueryInterface` des Ereignisempfängers gab den uninitialisierten Ausgabeparameter frei
 

@@ -379,7 +379,8 @@ end;
 
 procedure TVbaSyncConnect.CreateMenu;
 var
-  Bars, Bar, Controls, Events, EvObj: OleVariant;
+  Bars, Bar, Controls, Events, EvObj, Before: OleVariant;
+  Count, I: Integer;
   CPC: IConnectionPointContainer;
   Enum: IEnumConnectionPoints;
   CP: IConnectionPoint;
@@ -399,8 +400,22 @@ begin
     end;
     Step := 'Controls.Add';
     Controls := DispGet(Bar, 'Controls', []);
+    // Links vom Menue "Fenster" einfuegen (Id 30009, sprachunabhaengig);
+    // ohne Treffer ans Ende.
+    Before := EmptyParam;
+    try
+      Count := DispGet(Controls, 'Count', []);
+      for I := 1 to Count do
+        if DispGet(DispGet(Controls, 'Item', [I]), 'Id', []) = 30009 then
+        begin
+          Before := I;
+          Break;
+        end;
+    except
+      Before := EmptyParam;
+    end;
     FButton := DispCall(Controls, 'Add',
-      [msoControlButton, EmptyParam, EmptyParam, EmptyParam, True], DISPATCH_METHOD);
+      [msoControlButton, EmptyParam, EmptyParam, Before, True], DISPATCH_METHOD);
     Step := 'Button-Eigenschaften';
     DispPut(FButton, 'Caption', 'VbaSync...');
     DispPut(FButton, 'Style', msoButtonCaption);
