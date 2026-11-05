@@ -62,6 +62,10 @@ type
     procedure ExportAll(const Folder: string);
     /// Importiert alle (oder nur die genannten) Komponenten aus dem Ordner.
     procedure ImportFolder(const Folder: string; const Names: TArray<string>);
+    /// Importiert einzelne Dateien: vorhandene Komponenten werden ersetzt,
+    /// fehlende hinzugefuegt, Dokumentmodule bekommen nur neuen Code.
+    procedure ImportFiles(const Files: TArray<string>);
+    function ImportFile(const F: string): Boolean;
     /// Loescht genannte oder alle Nicht-Dokument-Komponenten.
     /// ClearDocs: leert zusaetzlich den Code der Dokumentmodule.
     procedure DeleteComponents(const Names: TArray<string>; All, ClearDocs: Boolean);
@@ -409,57 +413,99 @@ begin
   Log(Format('%d Komponenten nach %s exportiert.', [Count, Folder]));
 end;
 
+function TVbaSync.ImportFile(const F: string): Boolean;
+var
+  Ext, Name: string;
+  C: OleVariant;
+begin
+  Result := False;
+  Ext := LowerCase(ExtractFileExt(F));
+  if not MatchText(Ext, ImportExts) then
+  begin
+    if Ext <> '.frx' then // .frx gehoert zur .frm und wird mit ihr importiert
+      Log('  uebersprungen (Dateityp): ' + ExtractFileName(F));
+    Exit;
+  end;
+  if Ext = '.doccls' then
+    Name := TPath.GetFileNameWithoutExtension(F)
+  else
+    Name := ReadVbName(F);
+
+  // Dokumentmodul (DieseArbeitsmappe, Tabelle1 ...): nur den Code ersetzen.
+  // Gilt auch fuer eine per VBE exportierte .cls eines Dokumentmoduls.
+  if FindComponent(Name, C) and (ComponentType(C) = ct_Document) then
+  begin
+    if Ext = '.frm' then
+    begin
+      Log('  WARNUNG: "' + Name + '" ist ein Dokumentmodul, ' + ExtractFileName(F) + ' uebersprungen.');
+      Exit;
+    end;
+    ReplaceDocumentCode(C, ReadDocCode(F));
+    Log('  ersetzt (Dokument): ' + Name);
+    Exit(True);
+  end;
+  if Ext = '.doccls' then
+  begin
+    Log('  WARNUNG: Dokumentmodul "' + Name + '" gibt es in der Mappe nicht - uebersprungen ' +
+      '(Tabellenblaetter legt VbaSync nicht an).');
+    Exit;
+  end;
+
+  if (Ext = '.frm') and not FileExists(ChangeFileExt(F, '.frx')) then
+    Log('  WARNUNG: ' + ExtractFileName(F) + ' ohne .frx - Formular evtl. unvollstaendig.');
+
+  if not VarIsEmpty(C) then
+  begin
+    RemoveComponentSafe(C);
+    FProject.VBComponents.Import(F);
+    Log('  ersetzt: ' + Name + '  (' + ExtractFileName(F) + ')');
+  end
+  else
+  begin
+    FProject.VBComponents.Import(F);
+    Log('  neu hinzugefuegt: ' + Name + '  (' + ExtractFileName(F) + ')');
+  end;
+  Result := True;
+end;
+
+procedure TVbaSync.ImportFiles(const Files: TArray<string>);
+var
+  F: string;
+  Count: Integer;
+begin
+  Count := 0;
+  for F in Files do
+    if ImportFile(F) then
+      Inc(Count);
+  Log(Format('%d von %d Datei(en) importiert.', [Count, Length(Files)]));
+end;
+
 procedure TVbaSync.ImportFolder(const Folder: string; const Names: TArray<string>);
 var
   F, Ext, Name: string;
-  C: OleVariant;
-  Count: Integer;
+  Files: TArray<string>;
 begin
   if not TDirectory.Exists(Folder) then
     raise Exception.CreateFmt('Ordner "%s" existiert nicht.', [Folder]);
-  Count := 0;
+  Files := nil;
   for F in TDirectory.GetFiles(Folder) do
   begin
     Ext := LowerCase(ExtractFileExt(F));
     if not MatchText(Ext, ImportExts) then
       Continue;
-    if Ext = '.doccls' then
-      Name := TPath.GetFileNameWithoutExtension(F)
-    else
-      Name := ReadVbName(F);
-    if (Length(Names) > 0) and not MatchText(Name, Names) then
-      Continue;
-
-    if Ext = '.doccls' then
+    if Length(Names) > 0 then
     begin
-      if FindComponent(Name, C) and (ComponentType(C) = ct_Document) then
-      begin
-        ReplaceDocumentCode(C, ReadDocCode(F));
-        Log('  ersetzt (Dokument): ' + Name);
-        Inc(Count);
-      end
+      if Ext = '.doccls' then
+        Name := TPath.GetFileNameWithoutExtension(F)
       else
-        Log('  WARNUNG: Dokumentmodul "' + Name + '" gibt es in der Mappe nicht - uebersprungen.');
-      Continue;
-    end;
-
-    if (Ext = '.frm') and not FileExists(ChangeFileExt(F, '.frx')) then
-      Log('  WARNUNG: ' + ExtractFileName(F) + ' ohne .frx - Formular evtl. unvollstaendig.');
-
-    if FindComponent(Name, C) then
-    begin
-      if ComponentType(C) = ct_Document then
-      begin
-        Log('  WARNUNG: "' + Name + '" ist ein Dokumentmodul, Datei ' + ExtractFileName(F) + ' uebersprungen.');
+        Name := ReadVbName(F);
+      if not MatchText(Name, Names) then
         Continue;
-      end;
-      RemoveComponentSafe(C);
     end;
-    FProject.VBComponents.Import(F);
-    Log('  importiert: ' + ExtractFileName(F));
-    Inc(Count);
+    Files := Files + [F];
   end;
-  Log(Format('%d Komponenten aus %s importiert.', [Count, Folder]));
+  Log('Import aus ' + Folder);
+  ImportFiles(Files);
 end;
 
 procedure TVbaSync.DeleteComponents(const Names: TArray<string>; All, ClearDocs: Boolean);

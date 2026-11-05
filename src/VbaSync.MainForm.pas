@@ -42,6 +42,7 @@ type
     procedure DoExport(Sender: TObject);
     procedure DoImportAll(Sender: TObject);
     procedure DoImportSelected(Sender: TObject);
+    procedure DoImportFiles(Sender: TObject);
     procedure DoDeleteSelected(Sender: TObject);
     procedure DoDeleteAll(Sender: TObject);
     procedure DoClean(Sender: TObject);
@@ -168,7 +169,8 @@ begin
   AddButton(pnlRight, 'Keine markieren', Y, DoSelectNone);      Inc(Y, 48);
   AddButton(pnlRight, 'Alle exportieren', Y, DoExport);         Inc(Y, 48);
   AddButton(pnlRight, 'Alle importieren', Y, DoImportAll);      Inc(Y, 32);
-  AddButton(pnlRight, 'Markierte importieren', Y, DoImportSelected); Inc(Y, 48);
+  AddButton(pnlRight, 'Markierte importieren', Y, DoImportSelected); Inc(Y, 32);
+  AddButton(pnlRight, 'Dateien importieren...', Y, DoImportFiles); Inc(Y, 48);
   AddButton(pnlRight, 'Markierte loeschen', Y, DoDeleteSelected); Inc(Y, 32);
   AddButton(pnlRight, 'Alle loeschen', Y, DoDeleteAll);         Inc(Y, 32);
 
@@ -429,6 +431,39 @@ begin
     procedure(S: TVbaSync)
     begin
       S.ImportFolder(Folder, Names);
+    end);
+end;
+
+procedure TMainForm.DoImportFiles(Sender: TObject);
+var
+  Dlg: TFileOpenDialog;
+  FT: TFileTypeItem;
+  Files: TArray<string>;
+  I: Integer;
+begin
+  Dlg := TFileOpenDialog.Create(nil);
+  try
+    Dlg.Title := 'VBA-Dateien zum Importieren auswaehlen';
+    Dlg.Options := [fdoAllowMultiSelect, fdoFileMustExist, fdoPathMustExist];
+    FT := Dlg.FileTypes.Add;
+    FT.DisplayName := 'VBA-Komponenten (*.bas;*.cls;*.frm;*.doccls)';
+    FT.FileMask := '*.bas;*.cls;*.frm;*.doccls';
+    FT := Dlg.FileTypes.Add;
+    FT.DisplayName := 'Alle Dateien (*.*)';
+    FT.FileMask := '*.*';
+    if DirectoryExists(Trim(edFolder.Text)) then
+      Dlg.DefaultFolder := Trim(edFolder.Text);
+    if not Dlg.Execute then Exit;
+    Files := nil;
+    for I := 0 to Dlg.Files.Count - 1 do
+      Files := Files + [Dlg.Files[I]];
+  finally
+    Dlg.Free;
+  end;
+  RunAction(
+    procedure(S: TVbaSync)
+    begin
+      S.ImportFiles(Files);
     end);
 end;
 
