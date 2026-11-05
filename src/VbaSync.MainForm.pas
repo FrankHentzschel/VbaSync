@@ -47,6 +47,7 @@ type
     procedure DoDeleteAll(Sender: TObject);
     procedure DoClean(Sender: TObject);
     procedure HandleFirstShow(Sender: TObject);
+    procedure ApplyAppIcon;
     procedure DoAbout(Sender: TObject);
   public
     constructor Create(AOwner: TComponent); override;
@@ -58,6 +59,8 @@ var
 
 implementation
 
+{$R 'VbaSyncIcon.res'}  // Programmsymbol als Ressource VBASYNCICON (16-256 px)
+
 uses
   System.IOUtils, System.UITypes, System.StrUtils, System.Win.ComObj, Vcl.Graphics;
 
@@ -67,10 +70,29 @@ const
 
 { TMainForm }
 
+procedure TMainForm.ApplyAppIcon;
+
+  function Load(Size: Integer): HICON;
+  begin
+    Result := LoadImage(HInstance, 'VBASYNCICON', IMAGE_ICON, Size, Size, LR_DEFAULTCOLOR);
+  end;
+
+var
+  H: HICON;
+begin
+  // Fenster- und Taskleistensymbol unabhaengig von den Projektoptionen setzen.
+  // TIcon uebernimmt das Handle und gibt es frei, daher je ein eigenes Handle.
+  H := Load(GetSystemMetrics(SM_CXICON));
+  if H = HICON(0) then Exit;
+  Icon.Handle := H;
+  Application.Icon.Handle := Load(GetSystemMetrics(SM_CXICON));
+end;
+
 constructor TMainForm.Create(AOwner: TComponent);
 begin
   inherited CreateNew(AOwner);
   FFullNames := TStringList.Create;
+  ApplyAppIcon;
   BuildUI;
   OnShow := HandleFirstShow;
 end;
@@ -244,8 +266,8 @@ begin
     Dlg.Position := poOwnerFormCenter;
     Dlg.ClientWidth := 520;
 
-    // Programmsymbol (MAINICON aus der EXE) in 64x64
-    hIco := LoadImage(HInstance, 'MAINICON', IMAGE_ICON, 64, 64, LR_DEFAULTCOLOR);
+    // Programmsymbol (Ressource VBASYNCICON) in 64x64
+    hIco := LoadImage(HInstance, 'VBASYNCICON', IMAGE_ICON, 64, 64, LR_DEFAULTCOLOR);
     if hIco <> HICON(0) then
     begin
       Img := TImage.Create(Dlg);

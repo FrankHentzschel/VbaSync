@@ -11,3 +11,4 @@ __recovery/
 *.stat
 Win32/
 Win64/
+!src/VbaSyncIcon.res
