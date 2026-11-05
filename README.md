@@ -10,7 +10,8 @@ Ein VBE-Add-in mit Menü in der VBA-IDE folgt und nutzt dieselbe Unit.
 ## Bauen (Delphi 12)
 1. `src/vbasyncgui.dpr` (GUI) bzw. `src/vbasync.dpr` (Kommandozeile) in Delphi öffnen (die IDE legt die `.dproj` an).
 2. Zielplattform Win32 (Win64 geht auch). Da die EXE Excel von außen steuert, funktioniert sie mit 32- und 64-Bit-Office.
-3. Kompilieren. Es werden keine Typbibliotheken importiert, alles läuft per Late Binding.
+3. Einmalig: Projekt → Optionen → Anwendung → Symbol → „Symbol laden…“ → `res\VbaSync.ico` (für beide Projekte).
+4. Kompilieren. Es werden keine Typbibliotheken importiert, alles läuft per Late Binding.
 
 ## Voraussetzung in Excel
 Trust Center → Makroeinstellungen → **„Zugriff auf das VBA-Projektobjektmodell vertrauen“**.

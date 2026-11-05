@@ -217,7 +217,9 @@ end;
 procedure TMainForm.DoAbout(Sender: TObject);
 var
   Dlg: TForm;
-  Icon, Lbl: TLabel;
+  Lbl: TLabel;
+  Img: TImage;
+  hIco: HICON;
   Btn: TButton;
   Y: Integer;
   ExeTime: TDateTime;
@@ -242,13 +244,15 @@ begin
     Dlg.Position := poOwnerFormCenter;
     Dlg.ClientWidth := 520;
 
-    // Putzeimer-Symbol (Unicode U+1FAA3), dargestellt mit der Windows-Emoji-Schrift
-    Icon := TLabel.Create(Dlg);
-    Icon.Parent := Dlg;
-    Icon.SetBounds(20, 16, 80, 80);
-    Icon.Font.Name := 'Segoe UI Emoji';
-    Icon.Font.Size := 44;
-    Icon.Caption := #$D83E#$DEA3;
+    // Programmsymbol (MAINICON aus der EXE) in 64x64
+    hIco := LoadImage(HInstance, 'MAINICON', IMAGE_ICON, 64, 64, LR_DEFAULTCOLOR);
+    if hIco <> HICON(0) then
+    begin
+      Img := TImage.Create(Dlg);
+      Img.Parent := Dlg;
+      Img.SetBounds(24, 20, 64, 64);
+      Img.Picture.Icon.Handle := hIco; // TIcon gibt das Handle frei
+    end;
 
     Y := 18;
     AddLine(AppName, 18, True);
