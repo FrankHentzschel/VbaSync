@@ -49,6 +49,7 @@ type
     FProject: OleVariant;
     FLog: TLogProc;
     FDelCounter: Integer;
+    FQuiet: Boolean;  // Log unterdruecken (Vergleichs-Export in Temp-Ordner)
     procedure Log(const Msg: string);
     function FindComponent(const AName: string; out Comp: OleVariant): Boolean;
     procedure ReplaceDocumentCode(const Comp: OleVariant; const Code: string);
@@ -73,6 +74,9 @@ type
     /// Code-Cleaner: Export in Temp-Ordner, alles entfernen, neu importieren.
     /// Gibt den Backup-Ordner zurueck.
     function Clean: string;
+    /// Vergleicht den Code der Mappe mit den Dateien im Ordner (Export in einen
+    /// Temp-Ordner, dann byteweiser Vergleich). Liefert die Anzahl der Abweichungen.
+    function CompareWithFolder(const Folder: string): Integer;
   end;
 
 function ComponentType(const Comp: OleVariant): Integer;
@@ -295,7 +299,7 @@ end;
 
 procedure TVbaSync.Log(const Msg: string);
 begin
-  if Assigned(FLog) then
+  if Assigned(FLog) and not FQuiet then
     FLog(Msg);
 end;
 
@@ -587,6 +591,68 @@ begin
   DeleteComponents(nil, True, False);
   ImportFolder(Result, nil);
   Log('Clean abgeschlossen. Mappe jetzt speichern. Backup bleibt in ' + Result);
+end;
+
+function SameFileBytes(const A, B: string): Boolean;
+var
+  BA, BB: TBytes;
+begin
+  BA := TFile.ReadAllBytes(A);
+  BB := TFile.ReadAllBytes(B);
+  Result := (Length(BA) = Length(BB)) and
+    ((Length(BA) = 0) or CompareMem(@BA[0], @BB[0], Length(BA)));
+end;
+
+function TVbaSync.CompareWithFolder(const Folder: string): Integer;
+var
+  Tmp, F, N, Other: string;
+begin
+  if not TDirectory.Exists(Folder) then
+    raise Exception.Create('Ordner nicht gefunden: ' + Folder);
+  Tmp := TPath.Combine(TPath.GetTempPath,
+    'VbaSync_cmp_' + FormatDateTime('yyyymmdd_hhnnsszzz', Now));
+  Log('Vergleiche Mappe mit ' + Folder + ' ...');
+  FQuiet := True;
+  try
+    ExportAll(Tmp);
+  finally
+    FQuiet := False;
+  end;
+  Result := 0;
+  try
+    for F in TDirectory.GetFiles(Tmp) do
+    begin
+      N := ExtractFileName(F);
+      if not MatchText(ExtractFileExt(N), ManagedExts) then Continue;
+      Other := TPath.Combine(Folder, N);
+      if not TFile.Exists(Other) then
+      begin
+        Log('  nur in der Mappe: ' + N);
+        Inc(Result);
+      end
+      else if not SameFileBytes(F, Other) then
+      begin
+        Log('  abweichend:       ' + N);
+        Inc(Result);
+      end;
+    end;
+    for F in TDirectory.GetFiles(Folder) do
+    begin
+      N := ExtractFileName(F);
+      if MatchText(ExtractFileExt(N), ManagedExts) and
+         not TFile.Exists(TPath.Combine(Tmp, N)) then
+      begin
+        Log('  nur im Ordner:    ' + N);
+        Inc(Result);
+      end;
+    end;
+  finally
+    TDirectory.Delete(Tmp, True);
+  end;
+  if Result = 0 then
+    Log('Vergleich: Mappe und Ordner sind identisch.')
+  else
+    Log(Format('Vergleich: %d Abweichung(en).', [Result]));
 end;
 
 end.

@@ -49,6 +49,7 @@ type
     procedure DoSelectAll(Sender: TObject);
     procedure DoSelectNone(Sender: TObject);
     procedure DoExport(Sender: TObject);
+    procedure DoCompare(Sender: TObject);
     procedure DoImportAll(Sender: TObject);
     procedure DoImportSelected(Sender: TObject);
     procedure DoImportFiles(Sender: TObject);
@@ -302,6 +303,7 @@ begin
   AddButton('Alle markieren', 0, DoSelectAll);
   AddButton('Keine markieren', 0, DoSelectNone);
   AddButton('Alle exportieren', 1, DoExport);
+  AddButton('Mit Ordner vergleichen', 0, DoCompare);
   AddButton('Alle importieren', 1, DoImportAll);
   AddButton('Markierte importieren', 0, DoImportSelected);
   AddButton('Dateien importieren...', 0, DoImportFiles);
@@ -602,6 +604,18 @@ begin
     procedure(S: TVbaSync)
     begin
       S.ExportAll(Folder);
+    end);
+end;
+
+procedure TMainForm.DoCompare(Sender: TObject);
+var
+  Folder: string;
+begin
+  Folder := RequireFolder;
+  RunAction(
+    procedure(S: TVbaSync)
+    begin
+      S.CompareWithFolder(Folder);
     end);
 end;
 

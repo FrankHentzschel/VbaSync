@@ -2,6 +2,10 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.8.0 – 06.11.2026 00:50
+- Neu: „Mit Ordner vergleichen“ (GUI) bzw. `vbasync compare` (Kommandozeile): zeigt, welche Module von den Dateien im Ordner abweichen oder nur auf einer Seite vorhanden sind
+- README: „Bekannte Grenzen“ aktualisiert
+
 ## 1.7.1 – 06.11.2026 00:20
 - Fix Add-in: Name im Add-In-Manager ohne Versionsnummer (zeigte sonst die Version der letzten Registrierung)
 
