@@ -545,7 +545,7 @@ begin
       end;
       if R.OpenKey(AddinsKey, True) then
       begin
-        R.WriteString('FriendlyName', AppName + ' ' + AppVersion);
+        R.WriteString('FriendlyName', AppName); // ohne Version: wird nur bei regsvr32 geschrieben
         R.WriteString('Description', AppDescription);
         R.WriteInteger('LoadBehavior', 3); // beim Start laden + geladen
         R.WriteInteger('CommandLineSafe', 0);

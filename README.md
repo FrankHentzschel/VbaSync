@@ -55,6 +55,25 @@ Der Modulname wird beim Import aus `Attribute VB_Name` gelesen, nicht aus dem Da
 `export` löscht vorher die verwalteten Dateitypen im Zielordner, damit in Git entfernte Module als gelöscht erscheinen.
 `clean` exportiert zuerst in einen Temp-Ordner, der als Backup erhalten bleibt.
 
+## Git-Einstellungen für den exportierten Code
+Beim Export legt VbaSync im Exportordner eine `.gitattributes` an, falls dort noch keine liegt (eine vorhandene wird nie geändert):
+
+```
+*.bas     text eol=crlf working-tree-encoding=CP1252
+*.cls     text eol=crlf working-tree-encoding=CP1252
+*.frm     text eol=crlf working-tree-encoding=CP1252
+*.doccls  text eol=crlf working-tree-encoding=CP1252
+*.frx    binary
+```
+
+- `eol=crlf`: Die VBA-IDE importiert Dateien mit reinen LF-Zeilenenden fehlerhaft. So bleiben die Dateien lokal immer CRLF.
+- `working-tree-encoding`: Die Codepage wird aus der Windows-Einstellung gelesen (deutsch: CP1252). Git speichert UTF-8 im Repository, daher sind Umlaute in GitHub-Diffs lesbar. Lokal liegen die Dateien weiter in ANSI, wie die VBA-IDE sie braucht. Benötigt Git ≥ 2.18.
+- `.frx` ist binär und wird nie umgewandelt.
+
+Wichtig:
+- Die Umkodierung greift nur bei Commits über Git (Kommandozeile, GitHub Desktop, IDE), **nicht** beim Hochladen über die GitHub-Weboberfläche.
+- Waren die Dateien schon vorher eingecheckt, einmalig `git add --renormalize .` ausführen und committen.
+
 ## Bekannte Grenzen / ungetestet
 - Der Code ist **ungetestet** und wurde nicht kompiliert (er entstand ohne Delphi und ohne Excel).
 - `GetActiveOleObject` findet nur die erste registrierte Excel-Instanz.

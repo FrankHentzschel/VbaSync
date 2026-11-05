@@ -53,6 +53,7 @@ type
     function FindComponent(const AName: string; out Comp: OleVariant): Boolean;
     procedure ReplaceDocumentCode(const Comp: OleVariant; const Code: string);
     procedure RemoveComponentSafe(const Comp: OleVariant);
+    procedure EnsureGitAttributes(const Folder: string);
   public
     constructor Create(const AWorkbook: OleVariant; ALog: TLogProc);
     procedure ListComponents;
@@ -411,6 +412,38 @@ begin
     Log('  exportiert: ' + ExtractFileName(Path));
   end;
   Log(Format('%d Komponenten nach %s exportiert.', [Count, Folder]));
+  EnsureGitAttributes(Folder);
+end;
+
+{ Legt im Exportordner eine .gitattributes an, falls dort noch keine liegt:
+  - eol=crlf: die VBA-IDE importiert Dateien mit reinen LF-Zeilenenden fehlerhaft
+  - working-tree-encoding: Git speichert UTF-8 im Repository (Umlaute in
+    GitHub-Diffs lesbar) und schreibt die Dateien lokal in der ANSI-Codepage,
+    die der VBE-Export und -Import verwenden
+  - .frx ist binaer
+  Eine vorhandene Datei wird nie veraendert. }
+procedure TVbaSync.EnsureGitAttributes(const Folder: string);
+const
+  Exts: array[0..3] of string = ('bas', 'cls', 'frm', 'doccls');
+var
+  Path, Enc, Txt: string;
+  E: string;
+  CP: Cardinal;
+begin
+  Path := TPath.Combine(Folder, '.gitattributes');
+  if TFile.Exists(Path) then
+    Exit;
+  CP := GetACP;
+  if CP = CP_UTF8 then
+    Enc := ''  // System arbeitet bereits mit UTF-8: keine Umkodierung
+  else
+    Enc := ' working-tree-encoding=CP' + IntToStr(CP);
+  Txt := '# Angelegt von ' + 'VbaSync: Einstellungen fuer exportierten VBA-Code' + sLineBreak;
+  for E in Exts do
+    Txt := Txt + Format('*.%-7s text eol=crlf%s', [E, Enc]) + sLineBreak;
+  Txt := Txt + '*.frx    binary' + sLineBreak;
+  TFile.WriteAllText(Path, Txt, TEncoding.ASCII);
+  Log('  angelegt: .gitattributes (CRLF' + IfThen(Enc <> '', ', CP' + IntToStr(CP), '') + ')');
 end;
 
 function TVbaSync.ImportFile(const F: string): Boolean;

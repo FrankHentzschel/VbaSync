@@ -2,6 +2,12 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.7.1 – 06.11.2026 00:20
+- Fix Add-in: Name im Add-In-Manager ohne Versionsnummer (zeigte sonst die Version der letzten Registrierung)
+
+## 1.7.0 – 06.11.2026 00:05
+- Neu: Export legt im Exportordner eine `.gitattributes` an, falls keine vorhanden ist (CRLF, Umkodierung ANSI ↔ UTF-8 für .bas/.cls/.frm/.doccls, .frx binär)
+
 ## 1.6.1 – 05.11.2026 23:55
 - Fix Add-in: gibt beim Beenden von Excel (`OnBeginShutdown`) Menü, Ereignis und VBE-Referenz sofort frei (Versuch gegen hängenden Excel-Prozess)
 
