@@ -5,7 +5,7 @@ Zwei Programme mit derselben Kern-Unit `VbaSync.Core.pas`:
 - `vbasyncgui.exe`: Oberfläche (VCL) mit Komponentenliste, Checkboxen und Buttons
 - `vbasync.exe`: Kommandozeile, z. B. für Batch-Export
 
-Ein VBE-Add-in mit Menü in der VBA-IDE folgt und nutzt dieselbe Unit.
+- `VbaSyncAddin.dll`: VBE-Add-in mit Menü „VbaSync...“ in der VBA-IDE (siehe unten)
 
 ## Bauen (Delphi 12)
 1. `src/vbasyncgui.dpr` (GUI) bzw. `src/vbasync.dpr` (Kommandozeile) in Delphi öffnen (die IDE legt die `.dproj` an).
