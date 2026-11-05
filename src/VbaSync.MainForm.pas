@@ -11,7 +11,7 @@ interface
 uses
   Winapi.Windows, System.SysUtils, System.Classes, System.Variants,
   Vcl.Forms, Vcl.Controls, Vcl.StdCtrls, Vcl.ExtCtrls, Vcl.ComCtrls, Vcl.Dialogs,
-  VbaSync.Core;
+  VbaSync.Core, VbaSync.Version;
 
 type
   TMainForm = class(TForm)
@@ -47,6 +47,7 @@ type
     procedure DoDeleteAll(Sender: TObject);
     procedure DoClean(Sender: TObject);
     procedure DoShow(Sender: TObject);
+    procedure DoAbout(Sender: TObject);
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -93,12 +94,12 @@ end;
 
 procedure TMainForm.BuildUI;
 var
-  pnlTop, pnlRight: TPanel;
+  pnlTop, pnlRight, pnlInfo: TPanel;
   lbl: TLabel;
   Col: TListColumn;
   Y: Integer;
 begin
-  Caption := 'VbaSync - Excel-VBA Export / Import';
+  Caption := AppName + ' ' + AppVersion + ' - Excel-VBA Export / Import';
   Position := poScreenCenter;
   ClientWidth := FormW;
   ClientHeight := 640;
@@ -164,6 +165,13 @@ begin
   pnlRight.Width := BtnW;
   pnlRight.BevelOuter := bvNone;
 
+  pnlInfo := TPanel.Create(Self);
+  pnlInfo.Parent := pnlRight;
+  pnlInfo.Align := alBottom;
+  pnlInfo.Height := 40;
+  pnlInfo.BevelOuter := bvNone;
+  AddButton(pnlInfo, 'Info...', 4, DoAbout);
+
   Y := 4;
   AddButton(pnlRight, 'Alle markieren', Y, DoSelectAll);        Inc(Y, 32);
   AddButton(pnlRight, 'Keine markieren', Y, DoSelectNone);      Inc(Y, 48);
@@ -204,6 +212,71 @@ procedure TMainForm.Log(const Msg: string);
 begin
   memLog.Lines.Add(Msg);
   Application.ProcessMessages;
+end;
+
+procedure TMainForm.DoAbout(Sender: TObject);
+var
+  Dlg: TForm;
+  Icon, Lbl: TLabel;
+  Btn: TButton;
+  Y: Integer;
+  ExeTime: TDateTime;
+
+  procedure AddLine(const Text: string; Size: Integer; Bold: Boolean);
+  begin
+    Lbl := TLabel.Create(Dlg);
+    Lbl.Parent := Dlg;
+    Lbl.Left := 110;
+    Lbl.Top := Y;
+    Lbl.Font.Size := Size;
+    if Bold then Lbl.Font.Style := [fsBold];
+    Lbl.Caption := Text;
+    Inc(Y, Lbl.Height + 6);
+  end;
+
+begin
+  Dlg := TForm.CreateNew(Self);
+  try
+    Dlg.Caption := 'Info ueber ' + AppName;
+    Dlg.BorderStyle := bsDialog;
+    Dlg.Position := poOwnerFormCenter;
+    Dlg.ClientWidth := 520;
+
+    // Putzeimer-Symbol (Unicode U+1FAA3), dargestellt mit der Windows-Emoji-Schrift
+    Icon := TLabel.Create(Dlg);
+    Icon.Parent := Dlg;
+    Icon.SetBounds(20, 16, 80, 80);
+    Icon.Font.Name := 'Segoe UI Emoji';
+    Icon.Font.Size := 44;
+    Icon.Caption := #$D83E#$DEA3;
+
+    Y := 18;
+    AddLine(AppName, 18, True);
+    AddLine('Version ' + AppVersion, 11, False);
+    AddLine('Versionsdatum: ' + AppVersionDate, 9, False);
+    if FileAge(ParamStr(0), ExeTime) then
+      AddLine('EXE erstellt: ' + FormatDateTime('dd.mm.yyyy hh:nn', ExeTime), 9, False);
+    Inc(Y, 6);
+    AddLine(AppDescription, 9, False);
+    AddLine(AppRepoUrl, 9, False);
+    {$IFDEF WIN64}
+    AddLine('Plattform: Win64', 9, False);
+    {$ELSE}
+    AddLine('Plattform: Win32', 9, False);
+    {$ENDIF}
+
+    Btn := TButton.Create(Dlg);
+    Btn.Parent := Dlg;
+    Btn.Caption := 'OK';
+    Btn.ModalResult := mrOk;
+    Btn.Default := True;
+    Btn.Cancel := True;
+    Btn.SetBounds(Dlg.ClientWidth - 100, Y + 10, 88, 28);
+    Dlg.ClientHeight := Btn.Top + Btn.Height + 12;
+    Dlg.ShowModal;
+  finally
+    Dlg.Free;
+  end;
 end;
 
 procedure TMainForm.DoShow(Sender: TObject);

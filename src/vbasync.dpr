@@ -7,11 +7,12 @@ uses
   System.Variants,
   Winapi.ActiveX,
   System.Win.ComObj,
-  VbaSync.Core in 'VbaSync.Core.pas';
+  VbaSync.Core in 'VbaSync.Core.pas',
+  VbaSync.Version in 'VbaSync.Version.pas';
 
 procedure Usage;
 begin
-  Writeln('vbasync - Export/Import/Loeschen von Excel-VBA-Code');
+  Writeln(AppName + ' ' + AppVersion + ' (' + AppVersionDate + ') - Export/Import/Loeschen von Excel-VBA-Code');
   Writeln;
   Writeln('  vbasync list   <Mappe>');
   Writeln('  vbasync export <Mappe> <Ordner>');

@@ -3,6 +3,7 @@ program vbasyncgui;
 uses
   Vcl.Forms,
   VbaSync.Core in 'VbaSync.Core.pas',
+  VbaSync.Version in 'VbaSync.Version.pas',
   VbaSync.MainForm in 'VbaSync.MainForm.pas';
 
 begin
