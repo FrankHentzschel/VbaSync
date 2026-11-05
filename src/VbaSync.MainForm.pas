@@ -16,7 +16,7 @@ uses
 type
   TMainForm = class(TForm)
   private
-    FExcel: OleVariant;
+    FWorkbooks: TArray<OleVariant>;
     FFullNames: TStringList;
     cbWorkbook: TComboBox;
     btnRefresh: TButton;
@@ -76,7 +76,7 @@ end;
 destructor TMainForm.Destroy;
 begin
   FFullNames.Free;
-  FExcel := Unassigned;
+  FWorkbooks := nil;
   inherited;
 end;
 
@@ -174,10 +174,11 @@ begin
 
   chkClearDocs := TCheckBox.Create(Self);
   chkClearDocs.Parent := pnlRight;
-  chkClearDocs.SetBounds(8, Y, BtnW - 16, 34);
-  chkClearDocs.WordWrap := True;
-  chkClearDocs.Caption := 'Code in Tabellen/ DieseArbeitsmappe leeren';
-  Inc(Y, 50);
+  chkClearDocs.SetBounds(8, Y, BtnW - 16, 22);
+  chkClearDocs.Caption := 'Tabellen-Code leeren';
+  chkClearDocs.Hint := 'Beim Loeschen auch den Code in Tabellen und DieseArbeitsmappe leeren';
+  chkClearDocs.ShowHint := True;
+  Inc(Y, 40);
 
   AddButton(pnlRight, 'Clean (Code Cleaner)', Y, DoClean);
 
@@ -220,23 +221,26 @@ begin
   FFullNames.Clear;
   lvComps.Items.Clear;
   try
-    FExcel := GetActiveOleObject('Excel.Application');
+    FWorkbooks := GetOpenWorkbooks;
   except
-    FExcel := Unassigned;
-    Log('Keine laufende Excel-Instanz gefunden. Excel starten und "Aktualisieren" klicken.');
-    Exit;
+    on E: Exception do
+    begin
+      FWorkbooks := nil;
+      Log('FEHLER beim Suchen der Arbeitsmappen: ' + E.Message);
+    end;
   end;
-  for I := 1 to FExcel.Workbooks.Count do
+  for WB in FWorkbooks do
   begin
-    WB := FExcel.Workbooks.Item(I);
     cbWorkbook.Items.Add(VarToStr(WB.Name));
     FFullNames.Add(VarToStr(WB.FullName));
   end;
   if cbWorkbook.Items.Count = 0 then
   begin
-    Log('In Excel ist keine Arbeitsmappe geoeffnet.');
+    Log('Keine geoeffnete Arbeitsmappe gefunden. Hinweis: VbaSync nicht "als Administrator" ' +
+      'starten, wenn Excel normal laeuft (und umgekehrt).');
     Exit;
   end;
+  Log(Format('%d Arbeitsmappe(n) gefunden.', [cbWorkbook.Items.Count]));
   I := FFullNames.IndexOf(Prev);
   if I < 0 then I := 0;
   cbWorkbook.ItemIndex := I;
@@ -259,9 +263,9 @@ end;
 
 function TMainForm.CurrentWorkbook: OleVariant;
 begin
-  if VarIsEmpty(FExcel) or (cbWorkbook.ItemIndex < 0) then
+  if (cbWorkbook.ItemIndex < 0) or (cbWorkbook.ItemIndex >= Length(FWorkbooks)) then
     raise Exception.Create('Keine Arbeitsmappe ausgewaehlt.');
-  Result := OpenWorkbook(FExcel, FFullNames[cbWorkbook.ItemIndex]);
+  Result := FWorkbooks[cbWorkbook.ItemIndex];
 end;
 
 procedure TMainForm.RefreshComponents;

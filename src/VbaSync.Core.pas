@@ -75,11 +75,77 @@ function ExtensionForType(T: Integer): string;
 function TypeName(T: Integer): string;
 /// Sucht eine geoeffnete Mappe per Name oder Pfad; oeffnet sie, falls die Datei existiert.
 function OpenWorkbook(const ExcelApp: OleVariant; const Spec: string): OleVariant;
+/// Liefert alle geoeffneten Arbeitsmappen ueber ALLE laufenden Excel-Instanzen.
+/// Sucht ueber die Excel-Fenster (XLMAIN/XLDESK/EXCEL7) statt GetActiveOleObject,
+/// weil Letzteres nur die erste registrierte (evtl. leere/unsichtbare) Instanz findet.
+function GetOpenWorkbooks: TArray<OleVariant>;
 
 implementation
 
 uses
   System.IOUtils, System.StrUtils, Winapi.Windows, Winapi.ActiveX, System.Win.ComObj;
+
+const
+  OBJID_NATIVEOM = DWORD($FFFFFFF0);
+
+function AccessibleObjectFromWindow(hwnd: HWND; dwId: DWORD; const riid: TGUID;
+  out ppvObject): HResult; stdcall; external 'oleacc.dll';
+
+type
+  PHwndArray = ^TArray<HWND>;
+
+function EnumXlMain(Wnd: HWND; Param: LPARAM): BOOL; stdcall;
+var
+  Buf: array[0..63] of Char;
+begin
+  if (GetClassName(Wnd, Buf, Length(Buf)) > 0) and (StrComp(Buf, 'XLMAIN') = 0) then
+    PHwndArray(Param)^ := PHwndArray(Param)^ + [Wnd];
+  Result := True;
+end;
+
+function GetOpenWorkbooks: TArray<OleVariant>;
+var
+  Mains: TArray<HWND>;
+  Main, Desk, Child: HWND;
+  Disp: IDispatch;
+  WB: OleVariant;
+  Seen: TStringList;
+  Full: string;
+begin
+  Result := nil;
+  Mains := nil;
+  EnumWindows(@EnumXlMain, LPARAM(@Mains));
+  Seen := TStringList.Create;
+  try
+    Seen.CaseSensitive := False;
+    for Main in Mains do
+    begin
+      Desk := FindWindowEx(Main, 0, 'XLDESK', nil);
+      if Desk = 0 then Continue;
+      Child := FindWindowEx(Desk, 0, 'EXCEL7', nil);
+      while Child <> 0 do
+      begin
+        Disp := nil;
+        if Succeeded(AccessibleObjectFromWindow(Child, OBJID_NATIVEOM, IDispatch, Disp))
+          and Assigned(Disp) then
+        try
+          WB := OleVariant(Disp).Parent; // Excel.Window.Parent = Workbook
+          Full := VarToStr(WB.FullName);
+          if Seen.IndexOf(Full) < 0 then
+          begin
+            Seen.Add(Full);
+            Result := Result + [WB];
+          end;
+        except
+          // Fenster ohne Zugriff (z. B. anderes Rechte-Level) ignorieren
+        end;
+        Child := FindWindowEx(Desk, Child, 'EXCEL7', nil);
+      end;
+    end;
+  finally
+    Seen.Free;
+  end;
+end;
 
 const
   ManagedExts: array[0..4] of string = ('.bas', '.cls', '.frm', '.frx', '.doccls');
