@@ -2,6 +2,9 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.5.6 – 05.11.2026 23:25
+- Fix Add-in: Zugriffsverletzung bei `Advise`; `QueryInterface` des Ereignisempfängers gab den uninitialisierten Ausgabeparameter frei
+
 ## 1.5.5 – 05.11.2026 11:25
 - Fix Add-in: CommandBarEvents ist nur IUnknown; Typbibliothek jetzt über IDispatch, IProvideClassInfo oder direkt die registrierte VBIDE-Typbibliothek
 

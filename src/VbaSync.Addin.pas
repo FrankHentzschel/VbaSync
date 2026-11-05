@@ -114,6 +114,9 @@ function TCommandBarSink.QueryInterface(const IID: TGUID; out Obj): HResult;
 begin
   if IsEqualGUID(IID, IUnknown) or IsEqualGUID(IID, IDispatch) or IsEqualGUID(IID, FEventIID) then
   begin
+    // Obj kommt vom Aufrufer uninitialisiert: erst nil setzen, sonst ruft
+    // die Zuweisung _Release auf einem Zufallszeiger auf (Zugriffsverletzung).
+    Pointer(Obj) := nil;
     IDispatch(Obj) := Self;
     Result := S_OK;
   end
