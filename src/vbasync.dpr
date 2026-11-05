@@ -7,11 +7,12 @@ uses
   System.Variants,
   Winapi.ActiveX,
   System.Win.ComObj,
-  VbaSync.Core in 'VbaSync.Core.pas';
+  VbaSync.Core in 'VbaSync.Core.pas',
+  VbaSync.Version in 'VbaSync.Version.pas';
 
 procedure Usage;
 begin
-  Writeln('vbasync - Export/Import/Loeschen von Excel-VBA-Code');
+  Writeln(AppName + ' ' + AppVersion + ' (' + AppVersionDate + ') - Export/Import/Loeschen von Excel-VBA-Code');
   Writeln;
   Writeln('  vbasync list   <Mappe>');
   Writeln('  vbasync export <Mappe> <Ordner>');
@@ -25,7 +26,7 @@ end;
 
 var
   Cmd: string;
-  Excel, WB: OleVariant;
+  Excel, WB, Cand: OleVariant;
   Sync: TVbaSync;
   Names: TArray<string>;
   I: Integer;
@@ -43,12 +44,24 @@ begin
       end;
       Cmd := LowerCase(ParamStr(1));
 
-      try
-        Excel := GetActiveOleObject('Excel.Application');
-      except
-        raise Exception.Create('Keine laufende Excel-Instanz gefunden.');
+      // zuerst in allen Excel-Instanzen nach der geoeffneten Mappe suchen
+      WB := Unassigned;
+      for Cand in GetOpenWorkbooks do
+        if SameText(VarToStr(Cand.Name), ParamStr(2)) or
+           SameText(VarToStr(Cand.FullName), ExpandFileName(ParamStr(2))) then
+        begin
+          WB := Cand;
+          Break;
+        end;
+      if VarIsEmpty(WB) then
+      begin
+        try
+          Excel := GetActiveOleObject('Excel.Application');
+        except
+          raise Exception.Create('Arbeitsmappe nicht gefunden und keine laufende Excel-Instanz.');
+        end;
+        WB := OpenWorkbook(Excel, ParamStr(2));
       end;
-      WB := OpenWorkbook(Excel, ParamStr(2));
 
       Sync := TVbaSync.Create(WB,
         procedure(const Msg: string)

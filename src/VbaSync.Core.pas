@@ -37,6 +37,12 @@ const
 type
   TLogProc = reference to procedure(const Msg: string);
 
+  TVbaComponentInfo = record
+    Name: string;
+    CompType: Integer;
+    LineCount: Integer;
+  end;
+
   TVbaSync = class
   private
     FWorkbook: OleVariant;
@@ -50,11 +56,16 @@ type
   public
     constructor Create(const AWorkbook: OleVariant; ALog: TLogProc);
     procedure ListComponents;
+    function GetComponents: TArray<TVbaComponentInfo>;
     /// Exportiert alle Komponenten. Vorhandene .bas/.cls/.frm/.frx/.doccls im Ordner
     /// werden vorher geloescht, damit entfernte Module auch in Git als geloescht erscheinen.
     procedure ExportAll(const Folder: string);
     /// Importiert alle (oder nur die genannten) Komponenten aus dem Ordner.
     procedure ImportFolder(const Folder: string; const Names: TArray<string>);
+    /// Importiert einzelne Dateien: vorhandene Komponenten werden ersetzt,
+    /// fehlende hinzugefuegt, Dokumentmodule bekommen nur neuen Code.
+    procedure ImportFiles(const Files: TArray<string>);
+    function ImportFile(const F: string): Boolean;
     /// Loescht genannte oder alle Nicht-Dokument-Komponenten.
     /// ClearDocs: leert zusaetzlich den Code der Dokumentmodule.
     procedure DeleteComponents(const Names: TArray<string>; All, ClearDocs: Boolean);
@@ -68,11 +79,75 @@ function ExtensionForType(T: Integer): string;
 function TypeName(T: Integer): string;
 /// Sucht eine geoeffnete Mappe per Name oder Pfad; oeffnet sie, falls die Datei existiert.
 function OpenWorkbook(const ExcelApp: OleVariant; const Spec: string): OleVariant;
+/// Liefert alle geoeffneten Arbeitsmappen ueber ALLE laufenden Excel-Instanzen.
+/// Sucht ueber die Excel-Fenster (XLMAIN/XLDESK/EXCEL7) statt GetActiveOleObject,
+/// weil Letzteres nur die erste registrierte (evtl. leere/unsichtbare) Instanz findet.
+function GetOpenWorkbooks: TArray<OleVariant>;
 
 implementation
 
 uses
-  System.IOUtils, System.StrUtils, Winapi.Windows, Winapi.ActiveX, System.Win.ComObj;
+  System.IOUtils, System.StrUtils, System.Generics.Collections, Winapi.Windows, Winapi.ActiveX, System.Win.ComObj;
+
+const
+  OBJID_NATIVEOM = DWORD($FFFFFFF0);
+
+function AccessibleObjectFromWindow(hwnd: HWND; dwId: DWORD; const riid: TGUID;
+  out ppvObject): HResult; stdcall; external 'oleacc.dll';
+
+function EnumXlMain(Wnd: HWND; Param: LPARAM): BOOL; stdcall;
+var
+  Buf: array[0..63] of Char;
+begin
+  if (GetClassName(Wnd, Buf, Length(Buf)) > 0) and (StrComp(Buf, 'XLMAIN') = 0) then
+    TList<HWND>(Param).Add(Wnd);
+  Result := True;
+end;
+
+function GetOpenWorkbooks: TArray<OleVariant>;
+var
+  Mains: TList<HWND>;
+  Main, Desk, Child: HWND;
+  Disp: IDispatch;
+  WB: OleVariant;
+  Seen: TStringList;
+  Full: string;
+begin
+  Result := nil;
+  Mains := TList<HWND>.Create;
+  Seen := TStringList.Create;
+  try
+    EnumWindows(@EnumXlMain, LPARAM(Mains));
+    Seen.CaseSensitive := False;
+    for Main in Mains do
+    begin
+      Desk := FindWindowEx(Main, 0, 'XLDESK', nil);
+      if Desk = HWND(0) then Continue;
+      Child := FindWindowEx(Desk, 0, 'EXCEL7', nil);
+      while Child <> HWND(0) do
+      begin
+        Disp := nil;
+        if Succeeded(AccessibleObjectFromWindow(Child, OBJID_NATIVEOM, IDispatch, Disp))
+          and Assigned(Disp) then
+        try
+          WB := OleVariant(Disp).Parent; // Excel.Window.Parent = Workbook
+          Full := VarToStr(WB.FullName);
+          if Seen.IndexOf(Full) < 0 then
+          begin
+            Seen.Add(Full);
+            Result := Result + [WB];
+          end;
+        except
+          // Fenster ohne Zugriff (z. B. anderes Rechte-Level) ignorieren
+        end;
+        Child := FindWindowEx(Desk, Child, 'EXCEL7', nil);
+      end;
+    end;
+  finally
+    Seen.Free;
+    Mains.Free;
+  end;
+end;
 
 const
   ManagedExts: array[0..4] of string = ('.bas', '.cls', '.frm', '.frx', '.doccls');
@@ -263,6 +338,23 @@ begin
   FProject.VBComponents.Remove(Comp);
 end;
 
+function TVbaSync.GetComponents: TArray<TVbaComponentInfo>;
+var
+  I: Integer;
+  C: OleVariant;
+  Info: TVbaComponentInfo;
+begin
+  Result := nil;
+  for I := 1 to FProject.VBComponents.Count do
+  begin
+    C := FProject.VBComponents.Item(I);
+    Info.Name := VarToStr(C.Name);
+    Info.CompType := ComponentType(C);
+    Info.LineCount := C.CodeModule.CountOfLines;
+    Result := Result + [Info];
+  end;
+end;
+
 procedure TVbaSync.ListComponents;
 var
   I: Integer;
@@ -321,57 +413,99 @@ begin
   Log(Format('%d Komponenten nach %s exportiert.', [Count, Folder]));
 end;
 
+function TVbaSync.ImportFile(const F: string): Boolean;
+var
+  Ext, Name: string;
+  C: OleVariant;
+begin
+  Result := False;
+  Ext := LowerCase(ExtractFileExt(F));
+  if not MatchText(Ext, ImportExts) then
+  begin
+    if Ext <> '.frx' then // .frx gehoert zur .frm und wird mit ihr importiert
+      Log('  uebersprungen (Dateityp): ' + ExtractFileName(F));
+    Exit;
+  end;
+  if Ext = '.doccls' then
+    Name := TPath.GetFileNameWithoutExtension(F)
+  else
+    Name := ReadVbName(F);
+
+  // Dokumentmodul (DieseArbeitsmappe, Tabelle1 ...): nur den Code ersetzen.
+  // Gilt auch fuer eine per VBE exportierte .cls eines Dokumentmoduls.
+  if FindComponent(Name, C) and (ComponentType(C) = ct_Document) then
+  begin
+    if Ext = '.frm' then
+    begin
+      Log('  WARNUNG: "' + Name + '" ist ein Dokumentmodul, ' + ExtractFileName(F) + ' uebersprungen.');
+      Exit;
+    end;
+    ReplaceDocumentCode(C, ReadDocCode(F));
+    Log('  ersetzt (Dokument): ' + Name);
+    Exit(True);
+  end;
+  if Ext = '.doccls' then
+  begin
+    Log('  WARNUNG: Dokumentmodul "' + Name + '" gibt es in der Mappe nicht - uebersprungen ' +
+      '(Tabellenblaetter legt VbaSync nicht an).');
+    Exit;
+  end;
+
+  if (Ext = '.frm') and not FileExists(ChangeFileExt(F, '.frx')) then
+    Log('  WARNUNG: ' + ExtractFileName(F) + ' ohne .frx - Formular evtl. unvollstaendig.');
+
+  if not VarIsEmpty(C) then
+  begin
+    RemoveComponentSafe(C);
+    FProject.VBComponents.Import(F);
+    Log('  ersetzt: ' + Name + '  (' + ExtractFileName(F) + ')');
+  end
+  else
+  begin
+    FProject.VBComponents.Import(F);
+    Log('  neu hinzugefuegt: ' + Name + '  (' + ExtractFileName(F) + ')');
+  end;
+  Result := True;
+end;
+
+procedure TVbaSync.ImportFiles(const Files: TArray<string>);
+var
+  F: string;
+  Count: Integer;
+begin
+  Count := 0;
+  for F in Files do
+    if ImportFile(F) then
+      Inc(Count);
+  Log(Format('%d von %d Datei(en) importiert.', [Count, Length(Files)]));
+end;
+
 procedure TVbaSync.ImportFolder(const Folder: string; const Names: TArray<string>);
 var
   F, Ext, Name: string;
-  C: OleVariant;
-  Count: Integer;
+  Files: TArray<string>;
 begin
   if not TDirectory.Exists(Folder) then
     raise Exception.CreateFmt('Ordner "%s" existiert nicht.', [Folder]);
-  Count := 0;
+  Files := nil;
   for F in TDirectory.GetFiles(Folder) do
   begin
     Ext := LowerCase(ExtractFileExt(F));
     if not MatchText(Ext, ImportExts) then
       Continue;
-    if Ext = '.doccls' then
-      Name := TPath.GetFileNameWithoutExtension(F)
-    else
-      Name := ReadVbName(F);
-    if (Length(Names) > 0) and not MatchText(Name, Names) then
-      Continue;
-
-    if Ext = '.doccls' then
+    if Length(Names) > 0 then
     begin
-      if FindComponent(Name, C) and (ComponentType(C) = ct_Document) then
-      begin
-        ReplaceDocumentCode(C, ReadDocCode(F));
-        Log('  ersetzt (Dokument): ' + Name);
-        Inc(Count);
-      end
+      if Ext = '.doccls' then
+        Name := TPath.GetFileNameWithoutExtension(F)
       else
-        Log('  WARNUNG: Dokumentmodul "' + Name + '" gibt es in der Mappe nicht - uebersprungen.');
-      Continue;
-    end;
-
-    if (Ext = '.frm') and not FileExists(ChangeFileExt(F, '.frx')) then
-      Log('  WARNUNG: ' + ExtractFileName(F) + ' ohne .frx - Formular evtl. unvollstaendig.');
-
-    if FindComponent(Name, C) then
-    begin
-      if ComponentType(C) = ct_Document then
-      begin
-        Log('  WARNUNG: "' + Name + '" ist ein Dokumentmodul, Datei ' + ExtractFileName(F) + ' uebersprungen.');
+        Name := ReadVbName(F);
+      if not MatchText(Name, Names) then
         Continue;
-      end;
-      RemoveComponentSafe(C);
     end;
-    FProject.VBComponents.Import(F);
-    Log('  importiert: ' + ExtractFileName(F));
-    Inc(Count);
+    Files := Files + [F];
   end;
-  Log(Format('%d Komponenten aus %s importiert.', [Count, Folder]));
+  Log('Import aus ' + Folder);
+  ImportFiles(Files);
 end;
 
 procedure TVbaSync.DeleteComponents(const Names: TArray<string>; All, ClearDocs: Boolean);
