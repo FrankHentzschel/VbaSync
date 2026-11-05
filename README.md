@@ -31,10 +31,13 @@ Hinweis: Während Excel läuft, ist die DLL gesperrt. Zum Neubauen Excel schlie�
 ## GUI
 Excel starten, Mappe öffnen, `vbasyncgui.exe` starten. Oben Mappe wählen (Vorschlag für den Ordner: `src` neben der Mappe), rechts die Aktionen. „Markierte …“ bezieht sich auf die Häkchen in der Liste. Löschen, Import und Clean fragen vorher nach.
 
+„Mit Ordner vergleichen“ prüft, ob der Code in der Mappe den Dateien im Ordner entspricht, und listet im Protokoll Module auf, die abweichen, nur in der Mappe oder nur im Ordner vorhanden sind. Nützlich nach „Clean“ (Round-Trip-Test: exportieren, Clean, vergleichen) und vor einem Import.
+
 ## Kommandozeile (Excel muss laufen)
 ```
 vbasync list   Projekt.xlsm
 vbasync export Projekt.xlsm C:\Repos\Projekt\src
+vbasync compare Projekt.xlsm C:\Repos\Projekt\src          (ExitCode 2 bei Abweichungen)
 vbasync import Projekt.xlsm C:\Repos\Projekt\src            (alle)
 vbasync import Projekt.xlsm C:\Repos\Projekt\src modTools   (nur einzelne)
 vbasync delete Projekt.xlsm --all [--clear-docs]
@@ -74,11 +77,12 @@ Wichtig:
 - Die Umkodierung greift nur bei Commits über Git (Kommandozeile, GitHub Desktop, IDE), **nicht** beim Hochladen über die GitHub-Weboberfläche.
 - Waren die Dateien schon vorher eingecheckt, einmalig `git add --renormalize .` ausführen und committen.
 
-## Bekannte Grenzen / ungetestet
-- Der Code ist **ungetestet** und wurde nicht kompiliert (er entstand ohne Delphi und ohne Excel).
-- `GetActiveOleObject` findet nur die erste registrierte Excel-Instanz.
+## Bekannte Grenzen
+- Das Add-in ist nur als Win32-DLL für 32-Bit-Office getestet. Für 64-Bit-Office ist ein Win64-Build geplant (eigene DLL); ungetestet. GUI und Kommandozeile steuern Excel von außen und sind davon nicht betroffen.
 - Kennwortgeschützte Projekte werden abgelehnt.
 - Encoding: ANSI (System-Codepage), passend zum VBE-Export.
+- Leere Dokumentmodule (ganz ohne Code) werden nicht exportiert. Ein Modul mit nur `Option Explicit` gilt als Code und wird exportiert.
+- „Mit Ordner vergleichen“ vergleicht byteweise. Die VBA-IDE ändert beim Export teils die Groß-/Kleinschreibung von Bezeichnern (`.Name`/`.name`) und bei UserForms DPI-abhängige Größen in der `.frm`; solche Dateien erscheinen dann als „abweichend“.
 
 ## Test-Checkliste
 1. `list` auf einer Test-Mappe mit Modul, Klasse, UserForm und Code in Tabelle1/DieseArbeitsmappe.
