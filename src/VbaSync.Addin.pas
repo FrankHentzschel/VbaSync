@@ -325,6 +325,38 @@ begin
   DispCall(Obj, Name, [Value], DISPATCH_PROPERTYPUT);
 end;
 
+{ Ermittelt die IID der Ereignis-Schnittstelle _dispCommandBarControlEvents
+  aus der Typbibliothek, zu der das CommandBarEvents-Objekt gehoert (VBIDE).
+  So muss keine GUID fest im Code stehen. }
+function FindCommandBarEventIID(const EvObj: OleVariant; out IID: TGUID): Boolean;
+var
+  Disp: IDispatch;
+  TI, TI2: ITypeInfo;
+  TL: ITypeLib;
+  Idx, I: Integer;
+  Name: WideString;
+  PA: PTypeAttr;
+begin
+  Result := False;
+  Disp := IDispatch(EvObj);
+  if Failed(Disp.GetTypeInfo(0, 0, TI)) or (TI = nil) then Exit;
+  if Failed(TI.GetContainingTypeLib(TL, Idx)) or (TL = nil) then Exit;
+  for I := 0 to TL.GetTypeInfoCount - 1 do
+  begin
+    Name := '';
+    if Succeeded(TL.GetDocumentation(I, @Name, nil, nil, nil)) and
+       SameText(Name, '_dispCommandBarControlEvents') then
+    begin
+      if Succeeded(TL.GetTypeInfo(I, TI2)) and Succeeded(TI2.GetTypeAttr(PA)) then
+      begin
+        IID := PA^.guid;
+        TI2.ReleaseTypeAttr(PA);
+        Exit(True);
+      end;
+    end;
+  end;
+end;
+
 procedure TVbaSyncConnect.CreateMenu;
 var
   Bars, Bar, Controls, Events, EvObj: OleVariant;
@@ -360,12 +392,21 @@ begin
     Events := DispGet(FVBE, 'Events', []);
     EvObj := DispGet(Events, 'CommandBarEvents', [FButton]);
     FEvents := IUnknown(EvObj);
-    Step := 'Connection Point';
+    Step := 'Ereignis-Schnittstelle (Typbibliothek)';
+    if not FindCommandBarEventIID(EvObj, EventIID) then
+      EventIID := StringToGUID('{0002E131-0000-0000-C000-000000000046}'); // Annahme VBIDE
+    Step := 'FindConnectionPoint ' + GUIDToString(EventIID);
     CPC := FEvents as IConnectionPointContainer;
-    OleCheck(CPC.EnumConnectionPoints(Enum));
-    if Enum.Next(1, CP, nil) <> S_OK then
-      raise Exception.Create('Kein Connection Point fuer CommandBarEvents gefunden.');
-    OleCheck(CP.GetConnectionInterface(EventIID));
+    if Failed(CPC.FindConnectionPoint(EventIID, CP)) or (CP = nil) then
+    begin
+      // letzter Versuch: aufzaehlen
+      Step := 'EnumConnectionPoints';
+      OleCheck(CPC.EnumConnectionPoints(Enum));
+      if Enum.Next(1, CP, nil) <> S_OK then
+        raise Exception.Create('Kein Connection Point fuer CommandBarEvents gefunden.');
+      OleCheck(CP.GetConnectionInterface(EventIID));
+    end;
+    Step := 'Advise ' + GUIDToString(EventIID);
     FSink := TCommandBarSink.Create(EventIID, ShowMainForm);
     OleCheck(CP.Advise(FSink, FCookie));
     FConnPoint := CP;
