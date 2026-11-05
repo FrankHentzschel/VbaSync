@@ -2,6 +2,9 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.4.3 – 05.11.2026 10:45
+- Fix: Hauptfenster erscheint in Alt+Tab und in der Taskleiste
+
 ## 1.4.2 – 05.11.2026 10:40
 - Fix: Programmsymbol wird jetzt als eigene Ressource (`src/VbaSyncIcon.res`) eingebunden und im Fenster, in der Taskleiste und im Info-Dialog angezeigt, unabhängig von den Projektoptionen
 

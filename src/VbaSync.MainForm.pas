@@ -49,6 +49,8 @@ type
     procedure HandleFirstShow(Sender: TObject);
     procedure ApplyAppIcon;
     procedure DoAbout(Sender: TObject);
+  protected
+    procedure CreateParams(var Params: TCreateParams); override;
   public
     constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
@@ -69,6 +71,16 @@ const
   BtnW  = 170;
 
 { TMainForm }
+
+procedure TMainForm.CreateParams(var Params: TCreateParams);
+begin
+  inherited;
+  // Eigenstaendiges Top-Level-Fenster: erscheint in Alt+Tab und in der Taskleiste.
+  // (Das Fenster wird schon im Konstruktor erzeugt, bevor Application.MainForm
+  //  gesetzt ist; dadurch griff MainFormOnTaskbar nicht.)
+  Params.ExStyle := Params.ExStyle or WS_EX_APPWINDOW;
+  Params.WndParent := 0;
+end;
 
 procedure TMainForm.ApplyAppIcon;
 
