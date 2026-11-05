@@ -17,6 +17,8 @@ type
   TMainForm = class(TForm)
   private
     FWorkbooks: TArray<OleVariant>;
+    FOwnerWnd: HWND;       // Add-in: Fenster der VBA-IDE als Besitzer
+    FPreferred: string;    // Add-in: Pfad der aktiven Mappe vorauswaehlen
     FFullNames: TStringList;
     cbWorkbook: TComboBox;
     btnRefresh: TButton;
@@ -25,8 +27,15 @@ type
     lvComps: TListView;
     chkClearDocs: TCheckBox;
     memLog: TMemo;
+    pnlTop, pnlRight: TPanel;
+    lblWorkbook, lblFolder: TLabel;
+    FSideCtrls: TArray<TControl>;  // Schaltflaechen rechts, von oben nach unten
+    FSideGaps: TArray<Integer>;    // Abstand davor: 0 normal, 1 Gruppe, 2 Info
     procedure BuildUI;
-    function AddButton(AParent: TWinControl; const ACaption: string; ATop: Integer;
+    procedure LayoutControls;
+    procedure DoDpiChanged(Sender: TObject; OldDPI, NewDPI: Integer);
+    procedure AddSide(AControl: TControl; AGap: Integer);
+    function AddButton(const ACaption: string; AGap: Integer;
       AOnClick: TNotifyEvent): TButton;
     procedure Log(const Msg: string);
     function CurrentWorkbook: OleVariant;
@@ -53,6 +62,8 @@ type
     procedure CreateParams(var Params: TCreateParams); override;
   public
     constructor Create(AOwner: TComponent); override;
+    /// Aufruf aus dem VBE-Add-in: Besitzerfenster und vorzuwaehlende Mappe
+    constructor CreateForAddin(AOwnerWnd: HWND; const APreferredFullName: string);
     destructor Destroy; override;
   end;
 
@@ -68,7 +79,6 @@ uses
 
 const
   FormW = 920;
-  BtnW  = 170;
 
 { TMainForm }
 
@@ -78,8 +88,13 @@ begin
   // Eigenstaendiges Top-Level-Fenster: erscheint in Alt+Tab und in der Taskleiste.
   // (Das Fenster wird schon im Konstruktor erzeugt, bevor Application.MainForm
   //  gesetzt ist; dadurch griff MainFormOnTaskbar nicht.)
-  Params.ExStyle := Params.ExStyle or WS_EX_APPWINDOW;
-  Params.WndParent := 0;
+  if FOwnerWnd <> HWND(0) then
+    Params.WndParent := FOwnerWnd  // im Add-in: ueber der VBA-IDE
+  else
+  begin
+    Params.ExStyle := Params.ExStyle or WS_EX_APPWINDOW;
+    Params.WndParent := 0;
+  end;
 end;
 
 procedure TMainForm.ApplyAppIcon;
@@ -100,13 +115,22 @@ begin
   Application.Icon.Handle := Load(GetSystemMetrics(SM_CXICON));
 end;
 
+constructor TMainForm.CreateForAddin(AOwnerWnd: HWND; const APreferredFullName: string);
+begin
+  FOwnerWnd := AOwnerWnd;
+  FPreferred := APreferredFullName;
+  Create(nil);
+end;
+
 constructor TMainForm.Create(AOwner: TComponent);
 begin
   inherited CreateNew(AOwner);
   FFullNames := TStringList.Create;
   ApplyAppIcon;
   BuildUI;
+  LayoutControls;
   OnShow := HandleFirstShow;
+  OnAfterMonitorDpiChanged := DoDpiChanged;
 end;
 
 destructor TMainForm.Destroy;
@@ -116,22 +140,100 @@ begin
   inherited;
 end;
 
-function TMainForm.AddButton(AParent: TWinControl; const ACaption: string; ATop: Integer;
+procedure TMainForm.AddSide(AControl: TControl; AGap: Integer);
+begin
+  AControl.Parent := pnlRight;
+  FSideCtrls := FSideCtrls + [AControl];
+  FSideGaps := FSideGaps + [AGap];
+end;
+
+function TMainForm.AddButton(const ACaption: string; AGap: Integer;
   AOnClick: TNotifyEvent): TButton;
 begin
   Result := TButton.Create(Self);
-  Result.Parent := AParent;
-  Result.SetBounds(8, ATop, BtnW - 16, 28);
   Result.Caption := ACaption;
   Result.OnClick := AOnClick;
+  AddSide(Result, AGap);
+end;
+
+{ Ordnet Kopfbereich und Schaltflaechen an. Alle Schaltflaechen (auch
+  Aktualisieren/Durchsuchen) erhalten dieselbe Breite, die sich nach der
+  laengsten Beschriftung in der aktuellen Schrift richtet. Wird nach dem
+  Anzeigen und bei DPI-Wechsel erneut aufgerufen. }
+procedure TMainForm.LayoutControls;
+
+  function S(V: Integer): Integer;
+  begin
+    Result := MulDiv(V, CurrentPPI, 96);
+  end;
+
+  procedure Widen(var W: Integer; TW: Integer);
+  begin
+    if TW > W then W := TW;
+  end;
+
+var
+  I, W, H, Y, M, LblW, Row1, Row2, X: Integer;
+  C: TControl;
+const
+  Gaps: array[0..2] of Integer = (4, 16, 28);
+begin
+  if pnlRight = nil then Exit;
+  Canvas.Font := Font;
+  M := S(8);
+  H := Canvas.TextHeight('Ag') + S(12);
+  if H < S(26) then H := S(26);
+
+  // Einheitliche Breite: laengste Beschriftung plus Rand
+  W := S(150);
+  for I := 0 to High(FSideCtrls) do
+  begin
+    C := FSideCtrls[I];
+    if C is TButton then
+      Widen(W, Canvas.TextWidth(TButton(C).Caption) + S(28))
+    else if C is TCheckBox then
+      Widen(W, Canvas.TextWidth(TCheckBox(C).Caption) + GetSystemMetrics(SM_CXMENUCHECK) + S(16));
+  end;
+  Widen(W, Canvas.TextWidth(btnRefresh.Caption) + S(28));
+  Widen(W, Canvas.TextWidth(btnBrowse.Caption) + S(28));
+
+  // Kopfbereich
+  LblW := Canvas.TextWidth(lblWorkbook.Caption);
+  Widen(LblW, Canvas.TextWidth(lblFolder.Caption));
+  Inc(LblW, S(12));
+  Row1 := M;
+  Row2 := Row1 + H + S(6);
+  pnlTop.Height := Row2 + H + M;
+  X := pnlTop.ClientWidth - M - W;
+
+  btnRefresh.SetBounds(X, Row1, W, H);
+  btnBrowse.SetBounds(X, Row2, W, H);
+  cbWorkbook.SetBounds(M + LblW, Row1 + (H - cbWorkbook.Height) div 2,
+    X - M - (M + LblW), cbWorkbook.Height);
+  edFolder.SetBounds(M + LblW, Row2 + (H - edFolder.Height) div 2,
+    X - M - (M + LblW), edFolder.Height);
+  lblWorkbook.SetBounds(M, Row1 + (H - lblWorkbook.Height) div 2, LblW - S(4), lblWorkbook.Height);
+  lblFolder.SetBounds(M, Row2 + (H - lblFolder.Height) div 2, LblW - S(4), lblFolder.Height);
+
+  // Schaltflaechen rechts, Info-Button direkt unter der letzten
+  pnlRight.Width := W + 2 * M;
+  Y := 0;
+  for I := 0 to High(FSideCtrls) do
+  begin
+    Inc(Y, S(Gaps[FSideGaps[I]]));
+    FSideCtrls[I].SetBounds(M, Y, W, H);
+    Inc(Y, H);
+  end;
+end;
+
+procedure TMainForm.DoDpiChanged(Sender: TObject; OldDPI, NewDPI: Integer);
+begin
+  LayoutControls;
 end;
 
 procedure TMainForm.BuildUI;
 var
-  pnlTop, pnlRight, pnlInfo: TPanel;
-  lbl: TLabel;
   Col: TListColumn;
-  Y: Integer;
 begin
   Caption := AppName + ' ' + AppVersion + ' - Excel-VBA Export / Import';
   Position := poScreenCenter;
@@ -140,17 +242,16 @@ begin
   Constraints.MinWidth := 700;
   Constraints.MinHeight := 450;
 
-  { Kopfbereich: Arbeitsmappe und Ordner }
+  { Kopfbereich: Arbeitsmappe und Ordner (Positionen in LayoutControls) }
   pnlTop := TPanel.Create(Self);
   pnlTop.Parent := Self;
   pnlTop.Align := alTop;
   pnlTop.Height := 76;
   pnlTop.BevelOuter := bvNone;
 
-  lbl := TLabel.Create(Self);
-  lbl.Parent := pnlTop;
-  lbl.SetBounds(8, 12, 90, 17);
-  lbl.Caption := 'Arbeitsmappe:';
+  lblWorkbook := TLabel.Create(Self);
+  lblWorkbook.Parent := pnlTop;
+  lblWorkbook.Caption := 'Arbeitsmappe:';
 
   cbWorkbook := TComboBox.Create(Self);
   cbWorkbook.Parent := pnlTop;
@@ -166,10 +267,9 @@ begin
   btnRefresh.Caption := 'Aktualisieren';
   btnRefresh.OnClick := DoRefreshWorkbooks;
 
-  lbl := TLabel.Create(Self);
-  lbl.Parent := pnlTop;
-  lbl.SetBounds(8, 46, 90, 17);
-  lbl.Caption := 'Ordner:';
+  lblFolder := TLabel.Create(Self);
+  lblFolder.Parent := pnlTop;
+  lblFolder.Caption := 'Ordner:';
 
   edFolder := TEdit.Create(Self);
   edFolder.Parent := pnlTop;
@@ -192,39 +292,30 @@ begin
   memLog.ScrollBars := ssVertical;
   memLog.Font.Name := 'Consolas';
 
-  { Buttons rechts }
+  { Schaltflaechen rechts (Positionen in LayoutControls) }
   pnlRight := TPanel.Create(Self);
   pnlRight.Parent := Self;
   pnlRight.Align := alRight;
-  pnlRight.Width := BtnW;
+  pnlRight.Width := 180;
   pnlRight.BevelOuter := bvNone;
 
-  pnlInfo := TPanel.Create(Self);
-  pnlInfo.Parent := pnlRight;
-  pnlInfo.Align := alBottom;
-  pnlInfo.Height := 40;
-  pnlInfo.BevelOuter := bvNone;
-  AddButton(pnlInfo, 'Info...', 4, DoAbout);
-
-  Y := 4;
-  AddButton(pnlRight, 'Alle markieren', Y, DoSelectAll);        Inc(Y, 32);
-  AddButton(pnlRight, 'Keine markieren', Y, DoSelectNone);      Inc(Y, 48);
-  AddButton(pnlRight, 'Alle exportieren', Y, DoExport);         Inc(Y, 48);
-  AddButton(pnlRight, 'Alle importieren', Y, DoImportAll);      Inc(Y, 32);
-  AddButton(pnlRight, 'Markierte importieren', Y, DoImportSelected); Inc(Y, 32);
-  AddButton(pnlRight, 'Dateien importieren...', Y, DoImportFiles); Inc(Y, 48);
-  AddButton(pnlRight, 'Markierte loeschen', Y, DoDeleteSelected); Inc(Y, 32);
-  AddButton(pnlRight, 'Alle loeschen', Y, DoDeleteAll);         Inc(Y, 32);
+  AddButton('Alle markieren', 0, DoSelectAll);
+  AddButton('Keine markieren', 0, DoSelectNone);
+  AddButton('Alle exportieren', 1, DoExport);
+  AddButton('Alle importieren', 1, DoImportAll);
+  AddButton('Markierte importieren', 0, DoImportSelected);
+  AddButton('Dateien importieren...', 0, DoImportFiles);
+  AddButton('Markierte loeschen', 1, DoDeleteSelected);
+  AddButton('Alle loeschen', 0, DoDeleteAll);
 
   chkClearDocs := TCheckBox.Create(Self);
-  chkClearDocs.Parent := pnlRight;
-  chkClearDocs.SetBounds(8, Y, BtnW - 16, 22);
   chkClearDocs.Caption := 'Tabellen-Code leeren';
   chkClearDocs.Hint := 'Beim Loeschen auch den Code in Tabellen und DieseArbeitsmappe leeren';
   chkClearDocs.ShowHint := True;
-  Inc(Y, 40);
+  AddSide(chkClearDocs, 0);
 
-  AddButton(pnlRight, 'Clean (Code Cleaner)', Y, DoClean);
+  AddButton('Clean (Code Cleaner)', 1, DoClean);
+  AddButton('Info...', 2, DoAbout);
 
   { Komponentenliste }
   lvComps := TListView.Create(Self);
@@ -320,6 +411,7 @@ end;
 procedure TMainForm.HandleFirstShow(Sender: TObject);
 begin
   OnShow := nil;
+  LayoutControls;
   DoRefreshWorkbooks(nil);
 end;
 
@@ -330,7 +422,9 @@ var
   Prev: string;
 begin
   if cbWorkbook.ItemIndex >= 0 then
-    Prev := FFullNames[cbWorkbook.ItemIndex];
+    Prev := FFullNames[cbWorkbook.ItemIndex]
+  else
+    Prev := FPreferred;
   cbWorkbook.Items.Clear;
   FFullNames.Clear;
   lvComps.Items.Clear;
