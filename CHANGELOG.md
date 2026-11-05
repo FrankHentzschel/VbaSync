@@ -2,6 +2,9 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.5.5 – 05.11.2026 11:25
+- Fix Add-in: CommandBarEvents ist nur IUnknown; Typbibliothek jetzt über IDispatch, IProvideClassInfo oder direkt die registrierte VBIDE-Typbibliothek
+
 ## 1.5.4 – 05.11.2026 11:20
 - Add-in wird nur in Excel aktiv; in Access, Word usw. legt es kein Menü an
 

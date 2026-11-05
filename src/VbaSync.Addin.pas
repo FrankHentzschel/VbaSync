@@ -332,9 +332,12 @@ end;
 { Ermittelt die IID der Ereignis-Schnittstelle _dispCommandBarControlEvents
   aus der Typbibliothek, zu der das CommandBarEvents-Objekt gehoert (VBIDE).
   So muss keine GUID fest im Code stehen. }
-function FindCommandBarEventIID(const EvObj: OleVariant; out IID: TGUID): Boolean;
+function FindCommandBarEventIID(const Unk: IUnknown; out IID: TGUID): Boolean;
+const
+  LIBID_VBIDE: TGUID = '{0002E157-0000-0000-C000-000000000046}'; // VBA Extensibility 5.3
 var
   Disp: IDispatch;
+  PCI: IProvideClassInfo;
   TI, TI2: ITypeInfo;
   TL: ITypeLib;
   Idx, I: Integer;
@@ -342,9 +345,19 @@ var
   PA: PTypeAttr;
 begin
   Result := False;
-  Disp := IDispatch(EvObj);
-  if Failed(Disp.GetTypeInfo(0, 0, TI)) or (TI = nil) then Exit;
-  if Failed(TI.GetContainingTypeLib(TL, Idx)) or (TL = nil) then Exit;
+  TL := nil;
+  // 1. ueber IDispatch.GetTypeInfo
+  if Supports(Unk, IDispatch, Disp) and Succeeded(Disp.GetTypeInfo(0, 0, TI)) and (TI <> nil) then
+    TI.GetContainingTypeLib(TL, Idx);
+  // 2. ueber IProvideClassInfo
+  if (TL = nil) and Supports(Unk, IProvideClassInfo, PCI) and
+     Succeeded(PCI.GetClassInfo(TI)) and (TI <> nil) then
+    TI.GetContainingTypeLib(TL, Idx);
+  // 3. registrierte VBIDE-Typbibliothek direkt laden
+  if TL = nil then
+    LoadRegTypeLib(LIBID_VBIDE, 5, 3, 0, TL);
+  if TL = nil then
+    Exit;
   for I := 0 to TL.GetTypeInfoCount - 1 do
   begin
     Name := '';
@@ -397,7 +410,7 @@ begin
     EvObj := DispGet(Events, 'CommandBarEvents', [FButton]);
     FEvents := IUnknown(EvObj);
     Step := 'Ereignis-Schnittstelle (Typbibliothek)';
-    if not FindCommandBarEventIID(EvObj, EventIID) then
+    if not FindCommandBarEventIID(FEvents, EventIID) then
       EventIID := StringToGUID('{0002E131-0000-0000-C000-000000000046}'); // Annahme VBIDE
     Step := 'FindConnectionPoint ' + GUIDToString(EventIID);
     CPC := FEvents as IConnectionPointContainer;
