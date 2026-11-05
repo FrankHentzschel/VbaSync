@@ -83,7 +83,7 @@ function GetOpenWorkbooks: TArray<OleVariant>;
 implementation
 
 uses
-  System.IOUtils, System.StrUtils, Winapi.Windows, Winapi.ActiveX, System.Win.ComObj;
+  System.IOUtils, System.StrUtils, System.Generics.Collections, Winapi.Windows, Winapi.ActiveX, System.Win.ComObj;
 
 const
   OBJID_NATIVEOM = DWORD($FFFFFFF0);
@@ -91,21 +91,18 @@ const
 function AccessibleObjectFromWindow(hwnd: HWND; dwId: DWORD; const riid: TGUID;
   out ppvObject): HResult; stdcall; external 'oleacc.dll';
 
-type
-  PHwndArray = ^TArray<HWND>;
-
 function EnumXlMain(Wnd: HWND; Param: LPARAM): BOOL; stdcall;
 var
   Buf: array[0..63] of Char;
 begin
   if (GetClassName(Wnd, Buf, Length(Buf)) > 0) and (StrComp(Buf, 'XLMAIN') = 0) then
-    PHwndArray(Param)^ := PHwndArray(Param)^ + [Wnd];
+    TList<HWND>(Param).Add(Wnd);
   Result := True;
 end;
 
 function GetOpenWorkbooks: TArray<OleVariant>;
 var
-  Mains: TArray<HWND>;
+  Mains: TList<HWND>;
   Main, Desk, Child: HWND;
   Disp: IDispatch;
   WB: OleVariant;
@@ -113,17 +110,17 @@ var
   Full: string;
 begin
   Result := nil;
-  Mains := nil;
-  EnumWindows(@EnumXlMain, LPARAM(@Mains));
+  Mains := TList<HWND>.Create;
   Seen := TStringList.Create;
   try
+    EnumWindows(@EnumXlMain, LPARAM(Mains));
     Seen.CaseSensitive := False;
     for Main in Mains do
     begin
       Desk := FindWindowEx(Main, 0, 'XLDESK', nil);
-      if Desk = 0 then Continue;
+      if Desk = HWND(0) then Continue;
       Child := FindWindowEx(Desk, 0, 'EXCEL7', nil);
-      while Child <> 0 do
+      while Child <> HWND(0) do
       begin
         Disp := nil;
         if Succeeded(AccessibleObjectFromWindow(Child, OBJID_NATIVEOM, IDispatch, Disp))
@@ -144,6 +141,7 @@ begin
     end;
   finally
     Seen.Free;
+    Mains.Free;
   end;
 end;
 
