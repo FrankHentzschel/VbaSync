@@ -260,33 +260,112 @@ begin
   FVBE := Unassigned;
 end;
 
+{ Late-Binding-Aufruf mit Argumenten BY VALUE und expliziten Flags.
+  (Delphis eingebaute Variant-Aufrufe uebergeben Variablen by reference,
+   was die VBE-Objekte u. a. mit "Mitglied nicht gefunden" quittieren.) }
+function DispCall(const Obj: OleVariant; const Name: string;
+  const Args: array of OleVariant; Flags: Word): OleVariant;
+var
+  Disp: IDispatch;
+  DispId, PutId, I, N: Integer;
+  WName: WideString;
+  PName: PWideChar;
+  VArgs: array of TVariantArg;
+  DP: TDispParams;
+  Excep: TExcepInfo;
+  ArgErr: Cardinal;
+  HR: HResult;
+  Msg: string;
+begin
+  Disp := IDispatch(Obj);
+  if Disp = nil then
+    raise Exception.Create(Name + ': Objekt ist leer');
+  WName := Name;
+  PName := PWideChar(WName);
+  HR := Disp.GetIDsOfNames(GUID_NULL, @PName, 1, LOCALE_USER_DEFAULT, @DispId);
+  if Failed(HR) then
+    raise Exception.CreateFmt('%s: unbekannter Name (0x%.8x)', [Name, HR]);
+  N := Length(Args);
+  SetLength(VArgs, N);
+  for I := 0 to N - 1 do
+    VArgs[I] := PVariantArg(@Args[N - 1 - I])^; // umgekehrte Reihenfolge
+  FillChar(DP, SizeOf(DP), 0);
+  if N > 0 then
+    DP.rgvarg := PVariantArgList(@VArgs[0]);
+  DP.cArgs := N;
+  if Flags = DISPATCH_PROPERTYPUT then
+  begin
+    PutId := DISPID_PROPERTYPUT;
+    DP.rgdispidNamedArgs := PDispIDList(@PutId);
+    DP.cNamedArgs := 1;
+  end;
+  FillChar(Excep, SizeOf(Excep), 0);
+  ArgErr := 0;
+  if Flags = DISPATCH_PROPERTYPUT then
+    HR := Disp.Invoke(DispId, GUID_NULL, LOCALE_USER_DEFAULT, Flags, DP, nil, @Excep, @ArgErr)
+  else
+    HR := Disp.Invoke(DispId, GUID_NULL, LOCALE_USER_DEFAULT, Flags, DP, @Result, @Excep, @ArgErr);
+  if Failed(HR) then
+  begin
+    Msg := Excep.bstrDescription;
+    if Msg = '' then
+      Msg := SysErrorMessage(HR);
+    raise Exception.CreateFmt('%s: %s (0x%.8x)', [Name, Msg, HR]);
+  end;
+end;
+
+function DispGet(const Obj: OleVariant; const Name: string;
+  const Args: array of OleVariant): OleVariant;
+begin
+  Result := DispCall(Obj, Name, Args, DISPATCH_PROPERTYGET or DISPATCH_METHOD);
+end;
+
+procedure DispPut(const Obj: OleVariant; const Name: string; const Value: OleVariant);
+begin
+  DispCall(Obj, Name, [Value], DISPATCH_PROPERTYPUT);
+end;
+
 procedure TVbaSyncConnect.CreateMenu;
 var
-  Bar, EvObj: OleVariant;
+  Bar, Controls, Events, EvObj: OleVariant;
   CPC: IConnectionPointContainer;
   Enum: IEnumConnectionPoints;
   CP: IConnectionPoint;
   EventIID: TGUID;
+  Step: string;
 begin
-  // "Menu Bar" ist der sprachunabhaengige Name der Menueleiste der VBA-IDE
-  Bar := FVBE.CommandBars.Item('Menu Bar');
-  FButton := Bar.Controls.Add(msoControlButton, EmptyParam, EmptyParam, EmptyParam, True);
-  FButton.Caption := 'VbaSync...';
-  FButton.Style := msoButtonCaption;
-  FButton.Tag := AddinProgID;
-  FButton.TooltipText := 'Module exportieren, importieren, loeschen, Clean';
+  try
+    // "Menu Bar" ist der sprachunabhaengige Name der Menueleiste der VBA-IDE
+    Step := 'CommandBars("Menu Bar")';
+    Bar := DispGet(DispGet(FVBE, 'CommandBars', []), 'Item', ['Menu Bar']);
+    Step := 'Controls.Add';
+    Controls := DispGet(Bar, 'Controls', []);
+    FButton := DispCall(Controls, 'Add',
+      [msoControlButton, EmptyParam, EmptyParam, EmptyParam, True], DISPATCH_METHOD);
+    Step := 'Button-Eigenschaften';
+    DispPut(FButton, 'Caption', 'VbaSync...');
+    DispPut(FButton, 'Style', msoButtonCaption);
+    DispPut(FButton, 'Tag', AddinProgID);
+    DispPut(FButton, 'TooltipText', 'Module exportieren, importieren, loeschen, Clean');
 
-  // Click-Ereignis ueber VBE.Events.CommandBarEvents(Button) abonnieren
-  EvObj := FVBE.Events.CommandBarEvents[FButton];
-  FEvents := IUnknown(EvObj);
-  CPC := FEvents as IConnectionPointContainer;
-  OleCheck(CPC.EnumConnectionPoints(Enum));
-  if Enum.Next(1, CP, nil) <> S_OK then
-    raise Exception.Create('Kein Connection Point fuer CommandBarEvents gefunden.');
-  OleCheck(CP.GetConnectionInterface(EventIID));
-  FSink := TCommandBarSink.Create(EventIID, ShowMainForm);
-  OleCheck(CP.Advise(FSink, FCookie));
-  FConnPoint := CP;
+    // Click-Ereignis ueber VBE.Events.CommandBarEvents(Button) abonnieren
+    Step := 'Events.CommandBarEvents';
+    Events := DispGet(FVBE, 'Events', []);
+    EvObj := DispGet(Events, 'CommandBarEvents', [FButton]);
+    FEvents := IUnknown(EvObj);
+    Step := 'Connection Point';
+    CPC := FEvents as IConnectionPointContainer;
+    OleCheck(CPC.EnumConnectionPoints(Enum));
+    if Enum.Next(1, CP, nil) <> S_OK then
+      raise Exception.Create('Kein Connection Point fuer CommandBarEvents gefunden.');
+    OleCheck(CP.GetConnectionInterface(EventIID));
+    FSink := TCommandBarSink.Create(EventIID, ShowMainForm);
+    OleCheck(CP.Advise(FSink, FCookie));
+    FConnPoint := CP;
+  except
+    on E: Exception do
+      raise Exception.Create('Schritt ' + Step + ': ' + E.Message);
+  end;
 end;
 
 procedure TVbaSyncConnect.RemoveMenu;
@@ -301,7 +380,7 @@ begin
   if not VarIsEmpty(FButton) then
   begin
     try
-      FButton.Delete;
+      DispCall(FButton, 'Delete', [], DISPATCH_METHOD);
     except
     end;
     FButton := Unassigned;
@@ -317,12 +396,12 @@ begin
   OwnerWnd := 0;
   Preferred := '';
   try
-    OwnerWnd := HWND(Integer(FVBE.MainWindow.HWnd));
+    OwnerWnd := HWND(Integer(DispGet(DispGet(FVBE, 'MainWindow', []), 'HWnd', [])));
   except
   end;
   try
     // ungespeicherte Projekte haben keinen Dateinamen -> Fehler abfangen
-    Preferred := VarToStr(FVBE.ActiveVBProject.FileName);
+    Preferred := VarToStr(DispGet(DispGet(FVBE, 'ActiveVBProject', []), 'FileName', []));
   except
   end;
   Form := TMainForm.CreateForAddin(OwnerWnd, Preferred);

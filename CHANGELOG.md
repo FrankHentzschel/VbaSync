@@ -2,6 +2,10 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.5.1 – 05.11.2026 11:10
+- Fix Add-in: „Mitglied nicht gefunden“ beim Anlegen des Menüs; COM-Aufrufe jetzt mit Argumenten by value und expliziten Flags
+- Fehlermeldung nennt den fehlgeschlagenen Schritt
+
 ## 1.5.0 – 05.11.2026 11:05
 - Neu: VBE-Add-in `VbaSyncAddin.dll` (Win32) mit Menüeintrag „VbaSync...“ in der VBA-IDE; öffnet das VbaSync-Fenster mit der aktiven Mappe vorausgewählt
 - Registrierung pro Benutzer per `regsvr32`, ohne Administratorrechte

@@ -20,9 +20,9 @@ Trust Center → Makroeinstellungen → **„Zugriff auf das VBA-Projektobjektmo
 1. `src/VbaSyncAddin.dpr` in Delphi öffnen und als **Win32** bauen (passend zu 32-Bit-Office; für 64-Bit-Office Win64).
 2. Excel schließen. In einer Eingabeaufforderung (ohne Administrator):
    ```
-   regsvr32 C:\Work\VbaSync\src\Win32\Debug\VbaSyncAddin.dll
+   regsvr32 C:\Work\VbaSync\src\VbaSyncAddin.dll
    ```
-   Der Pfad hängt von deiner Ausgabe-Einstellung ab. Die DLL nach dem Registrieren nicht verschieben.
+   Die DLL liegt dort, wo die .dproj-Ausgabe hinzeigt (hier: `src`). Die DLL nach dem Registrieren nicht verschieben.
 3. Excel starten, VBA-Editor öffnen (Alt+F11). In der Menüleiste erscheint **VbaSync...**. Unter Add-Ins → Add-In-Manager ist „VbaSync“ gelistet.
 4. Entfernen: `regsvr32 /u <Pfad>\VbaSyncAddin.dll`.
 
