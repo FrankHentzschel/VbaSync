@@ -46,7 +46,7 @@ type
     procedure DoDeleteSelected(Sender: TObject);
     procedure DoDeleteAll(Sender: TObject);
     procedure DoClean(Sender: TObject);
-    procedure DoShow(Sender: TObject);
+    procedure HandleFirstShow(Sender: TObject);
     procedure DoAbout(Sender: TObject);
   public
     constructor Create(AOwner: TComponent); override;
@@ -59,7 +59,7 @@ var
 implementation
 
 uses
-  System.IOUtils, System.UITypes, System.StrUtils, System.Win.ComObj;
+  System.IOUtils, System.UITypes, System.StrUtils, System.Win.ComObj, Vcl.Graphics;
 
 const
   FormW = 920;
@@ -72,7 +72,7 @@ begin
   inherited CreateNew(AOwner);
   FFullNames := TStringList.Create;
   BuildUI;
-  OnShow := DoShow;
+  OnShow := HandleFirstShow;
 end;
 
 destructor TMainForm.Destroy;
@@ -279,7 +279,7 @@ begin
   end;
 end;
 
-procedure TMainForm.DoShow(Sender: TObject);
+procedure TMainForm.HandleFirstShow(Sender: TObject);
 begin
   OnShow := nil;
   DoRefreshWorkbooks(nil);

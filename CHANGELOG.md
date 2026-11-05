@@ -2,6 +2,10 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.3.1 – 05.11.2026 09:00
+- Fix: Compilerfehler E2003 `fsBold` (fehlende Unit Vcl.Graphics)
+- Fix: Warnung W1010 (Methode DoShow umbenannt)
+
 ## 1.3.0 – 05.11.2026 08:55
 - Info-Dialog (Button unten rechts) mit Programmname, Version, Versionsdatum und Erstellungszeit der EXE
 - Version im Fenstertitel
