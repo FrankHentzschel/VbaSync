@@ -1,17 +1,24 @@
 # VbaSync (Prototyp)
 
 Export, Import, Löschen und „Clean“ von Excel-VBA-Code für die Versionsverwaltung mit Git.
-Stand: Prototyp 1, Kommandozeile. Ein VBE-Add-in mit Menü folgt und nutzt dieselbe Unit `VbaSync.Core.pas`.
+Zwei Programme mit derselben Kern-Unit `VbaSync.Core.pas`:
+- `vbasyncgui.exe`: Oberfläche (VCL) mit Komponentenliste, Checkboxen und Buttons
+- `vbasync.exe`: Kommandozeile, z. B. für Batch-Export
+
+Ein VBE-Add-in mit Menü in der VBA-IDE folgt und nutzt dieselbe Unit.
 
 ## Bauen (Delphi 12)
-1. `src/vbasync.dpr` in Delphi öffnen (die IDE legt die `.dproj` an).
+1. `src/vbasyncgui.dpr` (GUI) bzw. `src/vbasync.dpr` (Kommandozeile) in Delphi öffnen (die IDE legt die `.dproj` an).
 2. Zielplattform Win32 (Win64 geht auch). Da die EXE Excel von außen steuert, funktioniert sie mit 32- und 64-Bit-Office.
 3. Kompilieren. Es werden keine Typbibliotheken importiert, alles läuft per Late Binding.
 
 ## Voraussetzung in Excel
 Trust Center → Makroeinstellungen → **„Zugriff auf das VBA-Projektobjektmodell vertrauen“**.
 
-## Aufruf (Excel muss laufen)
+## GUI
+Excel starten, Mappe öffnen, `vbasyncgui.exe` starten. Oben Mappe wählen (Vorschlag für den Ordner: `src` neben der Mappe), rechts die Aktionen. „Markierte …“ bezieht sich auf die Häkchen in der Liste. Löschen, Import und Clean fragen vorher nach.
+
+## Kommandozeile (Excel muss laufen)
 ```
 vbasync list   Projekt.xlsm
 vbasync export Projekt.xlsm C:\Repos\Projekt\src

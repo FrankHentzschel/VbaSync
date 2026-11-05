@@ -37,6 +37,12 @@ const
 type
   TLogProc = reference to procedure(const Msg: string);
 
+  TVbaComponentInfo = record
+    Name: string;
+    CompType: Integer;
+    LineCount: Integer;
+  end;
+
   TVbaSync = class
   private
     FWorkbook: OleVariant;
@@ -50,6 +56,7 @@ type
   public
     constructor Create(const AWorkbook: OleVariant; ALog: TLogProc);
     procedure ListComponents;
+    function GetComponents: TArray<TVbaComponentInfo>;
     /// Exportiert alle Komponenten. Vorhandene .bas/.cls/.frm/.frx/.doccls im Ordner
     /// werden vorher geloescht, damit entfernte Module auch in Git als geloescht erscheinen.
     procedure ExportAll(const Folder: string);
@@ -261,6 +268,23 @@ begin
   Inc(FDelCounter);
   Comp.Name := Format('zzVbaSyncDel%d', [FDelCounter]);
   FProject.VBComponents.Remove(Comp);
+end;
+
+function TVbaSync.GetComponents: TArray<TVbaComponentInfo>;
+var
+  I: Integer;
+  C: OleVariant;
+  Info: TVbaComponentInfo;
+begin
+  Result := nil;
+  for I := 1 to FProject.VBComponents.Count do
+  begin
+    C := FProject.VBComponents.Item(I);
+    Info.Name := VarToStr(C.Name);
+    Info.CompType := ComponentType(C);
+    Info.LineCount := C.CodeModule.CountOfLines;
+    Result := Result + [Info];
+  end;
 end;
 
 procedure TVbaSync.ListComponents;
