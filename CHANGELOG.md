@@ -2,6 +2,9 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.5.2 – 05.11.2026 11:15
+- Fix Add-in: Bereichsprüfungsfehler beim Formatieren von COM-Fehlercodes; Menüleiste über `CommandBars.ActiveMenuBar` (Fallback „Menu Bar“)
+
 ## 1.5.1 – 05.11.2026 11:10
 - Fix Add-in: „Mitglied nicht gefunden“ beim Anlegen des Menüs; COM-Aufrufe jetzt mit Argumenten by value und expliziten Flags
 - Fehlermeldung nennt den fehlgeschlagenen Schritt

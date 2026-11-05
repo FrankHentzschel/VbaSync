@@ -309,7 +309,7 @@ begin
   begin
     Msg := Excep.bstrDescription;
     if Msg = '' then
-      Msg := SysErrorMessage(HR);
+      Msg := SysErrorMessage(Cardinal(HR)); // HRESULT ist negativ -> Cast noetig
     raise Exception.CreateFmt('%s: %s (0x%.8x)', [Name, Msg, HR]);
   end;
 end;
@@ -327,7 +327,7 @@ end;
 
 procedure TVbaSyncConnect.CreateMenu;
 var
-  Bar, Controls, Events, EvObj: OleVariant;
+  Bars, Bar, Controls, Events, EvObj: OleVariant;
   CPC: IConnectionPointContainer;
   Enum: IEnumConnectionPoints;
   CP: IConnectionPoint;
@@ -336,8 +336,15 @@ var
 begin
   try
     // "Menu Bar" ist der sprachunabhaengige Name der Menueleiste der VBA-IDE
-    Step := 'CommandBars("Menu Bar")';
-    Bar := DispGet(DispGet(FVBE, 'CommandBars', []), 'Item', ['Menu Bar']);
+    Step := 'VBE.CommandBars';
+    Bars := DispGet(FVBE, 'CommandBars', []);
+    Step := 'CommandBars.ActiveMenuBar';
+    try
+      Bar := DispGet(Bars, 'ActiveMenuBar', []);
+    except
+      Step := 'CommandBars("Menu Bar")';
+      Bar := DispGet(Bars, 'Item', ['Menu Bar']);
+    end;
     Step := 'Controls.Add';
     Controls := DispGet(Bar, 'Controls', []);
     FButton := DispCall(Controls, 'Add',
