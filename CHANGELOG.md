@@ -2,6 +2,9 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.4.1 – 05.11.2026 10:35
+- Programmsymbol überarbeitet: modernes Whiteboard mit farbigem Code und Wischer
+
 ## 1.4.0 – 05.11.2026 10:30
 - Neues Programmsymbol (Tafel mit Schwamm), `res/VbaSync.ico` mit 16–256 px
 - Info-Dialog zeigt das Programmsymbol statt des Emojis
