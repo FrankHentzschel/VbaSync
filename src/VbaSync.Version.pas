@@ -13,7 +13,7 @@ interface
 const
   AppName        = 'VbaSync';
   AppDescription = 'Export, Import und Clean von Excel-VBA-Code fuer die Versionsverwaltung';
-  AppVersion     = '1.7.2';
+  AppVersion     = '1.8.1';
   AppVersionDate = '25.11.2026 10:05';
   AppRepoUrl     = 'https://github.com/FrankHentzschel/VbaSync';
 
