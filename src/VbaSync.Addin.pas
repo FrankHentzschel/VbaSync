@@ -491,7 +491,7 @@ begin
     Preferred := VarToStr(DispGet(DispGet(FVBE, 'ActiveVBProject', []), 'FileName', []));
   except
   end;
-  Form := TMainForm.CreateForAddin(OwnerWnd, Preferred);
+  Form := TMainForm.CreateForAddin(OwnerWnd, Preferred, FVBE);
   try
     Form.ShowModal;
   finally

@@ -83,7 +83,13 @@ function OpenWorkbook(const ExcelApp: OleVariant; const Spec: string): OleVarian
 /// Liefert alle geoeffneten Arbeitsmappen ueber ALLE laufenden Excel-Instanzen.
 /// Sucht ueber die Excel-Fenster (XLMAIN/XLDESK/EXCEL7) statt GetActiveOleObject,
 /// weil Letzteres nur die erste registrierte (evtl. leere/unsichtbare) Instanz findet.
-function GetOpenWorkbooks: TArray<OleVariant>;
+/// ALog (optional) erhaelt Fehler bei einzelnen Fenstern, statt sie still zu verwerfen.
+function GetOpenWorkbooks(ALog: TLogProc = nil): TArray<OleVariant>;
+/// Add-in: liefert die Mappen der Excel-Instanz, in der die VBA-IDE laeuft.
+/// Ermittelt Excel.Application ueber ein Dokumentmodul eines VBProjects
+/// (VBComponent.Properties("Application")) und liest dann Application.Workbooks.
+/// Kein Umweg ueber Fenster, daher unabhaengig von Fensterklassen und Rechte-Level.
+function GetWorkbooksFromVBE(const VBE: OleVariant; ALog: TLogProc = nil): TArray<OleVariant>;
 
 implementation
 
@@ -105,7 +111,7 @@ begin
   Result := True;
 end;
 
-function GetOpenWorkbooks: TArray<OleVariant>;
+function GetOpenWorkbooks(ALog: TLogProc): TArray<OleVariant>;
 var
   Mains: TList<HWND>;
   Main, Desk, Child: HWND;
@@ -139,7 +145,10 @@ begin
             Result := Result + [WB];
           end;
         except
-          // Fenster ohne Zugriff (z. B. anderes Rechte-Level) ignorieren
+          // Fenster ohne Zugriff (z. B. anderes Rechte-Level) ueberspringen, aber melden
+          on E: Exception do
+            if Assigned(ALog) then
+              ALog(Format('Hinweis: Excel-Fenster $%x nicht lesbar: %s', [NativeUInt(Child), E.Message]));
         end;
         Child := FindWindowEx(Desk, Child, 'EXCEL7', nil);
       end;
@@ -150,11 +159,78 @@ begin
   end;
 end;
 
+{ "Type" und "Object" sind in Pascal reservierte Woerter -> Property-Get direkt ueber IDispatch. }
+function OleGetProp(const Obj: OleVariant; const Name: WideString): OleVariant; forward;
+
+function GetExcelFromVBE(const VBE: OleVariant; ALog: TLogProc): OleVariant;
+var
+  Projects, Proj, Comps, Comp, Prop: OleVariant;
+  I, J: Integer;
+  LastErr: string;
+begin
+  Result := Unassigned;
+  LastErr := '';
+  Projects := VBE.VBProjects;
+  for I := 1 to Integer(Projects.Count) do
+  begin
+    try
+      Proj := Projects.Item(I);
+      if Integer(Proj.Protection) = pp_Locked then Continue; // gesperrte Projekte liefern keine Komponenten
+      Comps := Proj.VBComponents;
+      for J := 1 to Integer(Comps.Count) do
+      begin
+        Comp := Comps.Item(J);
+        if Integer(OleGetProp(Comp, 'Type')) <> ct_Document then Continue; // nur Dokumentmodule
+        Prop := Comp.Properties.Item('Application');
+        try
+          Result := OleGetProp(Prop, 'Object');
+        except
+          Result := Unassigned;
+        end;
+        if VarType(Result) <> varDispatch then
+          Result := Prop.Value;
+        if VarType(Result) = varDispatch then
+          Exit;
+        Result := Unassigned;
+      end;
+    except
+      on E: Exception do
+        LastErr := E.Message;
+    end;
+  end;
+  if (LastErr <> '') and Assigned(ALog) then
+    ALog('Hinweis: Excel ueber VBE nicht vollstaendig lesbar: ' + LastErr);
+end;
+
+function GetWorkbooksFromVBE(const VBE: OleVariant; ALog: TLogProc): TArray<OleVariant>;
+var
+  XL, Books, WB: OleVariant;
+  I: Integer;
+begin
+  Result := nil;
+  XL := GetExcelFromVBE(VBE, ALog);
+  if VarIsEmpty(XL) then
+  begin
+    if Assigned(ALog) then
+      ALog('Hinweis: Excel-Application ueber VBE nicht gefunden (kein ungesperrtes Projekt mit Dokumentmodul).');
+    Exit;
+  end;
+  Books := XL.Workbooks;
+  for I := 1 to Integer(Books.Count) do
+    try
+      WB := Books.Item(I);
+      Result := Result + [WB];
+    except
+      on E: Exception do
+        if Assigned(ALog) then
+          ALog(Format('Hinweis: Arbeitsmappe %d nicht lesbar: %s', [I, E.Message]));
+    end;
+end;
+
 const
   ManagedExts: array[0..4] of string = ('.bas', '.cls', '.frm', '.frx', '.doccls');
   ImportExts:  array[0..3] of string = ('.bas', '.cls', '.frm', '.doccls');
 
-{ "Type" ist in Pascal ein reserviertes Wort, daher Property-Get direkt ueber IDispatch. }
 function OleGetProp(const Obj: OleVariant; const Name: WideString): OleVariant;
 var
   Disp: IDispatch;
