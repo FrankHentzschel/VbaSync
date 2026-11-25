@@ -19,6 +19,7 @@ type
     FWorkbooks: TArray<OleVariant>;
     FOwnerWnd: HWND;       // Add-in: Fenster der VBA-IDE als Besitzer
     FPreferred: string;    // Add-in: Pfad der aktiven Mappe vorauswaehlen
+    FVBE: OleVariant;      // Add-in: VBE-Objekt; Mappen werden darueber ermittelt
     FFullNames: TStringList;
     cbWorkbook: TComboBox;
     btnRefresh: TButton;
@@ -49,6 +50,7 @@ type
     procedure DoSelectAll(Sender: TObject);
     procedure DoSelectNone(Sender: TObject);
     procedure DoExport(Sender: TObject);
+    procedure DoCompare(Sender: TObject);
     procedure DoImportAll(Sender: TObject);
     procedure DoImportSelected(Sender: TObject);
     procedure DoImportFiles(Sender: TObject);
@@ -63,7 +65,8 @@ type
   public
     constructor Create(AOwner: TComponent); override;
     /// Aufruf aus dem VBE-Add-in: Besitzerfenster und vorzuwaehlende Mappe
-    constructor CreateForAddin(AOwnerWnd: HWND; const APreferredFullName: string);
+    constructor CreateForAddin(AOwnerWnd: HWND; const APreferredFullName: string;
+      const AVBE: OleVariant);
     destructor Destroy; override;
   end;
 
@@ -115,10 +118,12 @@ begin
   Application.Icon.Handle := Load(GetSystemMetrics(SM_CXICON));
 end;
 
-constructor TMainForm.CreateForAddin(AOwnerWnd: HWND; const APreferredFullName: string);
+constructor TMainForm.CreateForAddin(AOwnerWnd: HWND; const APreferredFullName: string;
+  const AVBE: OleVariant);
 begin
   FOwnerWnd := AOwnerWnd;
   FPreferred := APreferredFullName;
+  FVBE := AVBE;
   Create(nil);
 end;
 
@@ -137,6 +142,7 @@ destructor TMainForm.Destroy;
 begin
   FFullNames.Free;
   FWorkbooks := nil;
+  FVBE := Unassigned;
   inherited;
 end;
 
@@ -302,6 +308,7 @@ begin
   AddButton('Alle markieren', 0, DoSelectAll);
   AddButton('Keine markieren', 0, DoSelectNone);
   AddButton('Alle exportieren', 1, DoExport);
+  AddButton('Mit Ordner vergleichen', 0, DoCompare);
   AddButton('Alle importieren', 1, DoImportAll);
   AddButton('Markierte importieren', 0, DoImportSelected);
   AddButton('Dateien importieren...', 0, DoImportFiles);
@@ -428,15 +435,26 @@ begin
   cbWorkbook.Items.Clear;
   FFullNames.Clear;
   lvComps.Items.Clear;
-  try
-    FWorkbooks := GetOpenWorkbooks;
-  except
-    on E: Exception do
-    begin
-      FWorkbooks := nil;
-      Log('FEHLER beim Suchen der Arbeitsmappen: ' + E.Message);
+  FWorkbooks := nil;
+  // Add-in: Mappen direkt ueber das VBE-Objekt der eigenen Excel-Instanz holen
+  if not VarIsEmpty(FVBE) then
+    try
+      FWorkbooks := GetWorkbooksFromVBE(FVBE, Log);
+    except
+      on E: Exception do
+        Log('FEHLER beim Lesen der Arbeitsmappen ueber die VBA-IDE: ' + E.Message);
     end;
-  end;
+  // EXE (oder Rueckfall im Add-in): ueber die Excel-Fenster suchen
+  if Length(FWorkbooks) = 0 then
+    try
+      FWorkbooks := GetOpenWorkbooks(Log);
+    except
+      on E: Exception do
+      begin
+        FWorkbooks := nil;
+        Log('FEHLER beim Suchen der Arbeitsmappen: ' + E.Message);
+      end;
+    end;
   for WB in FWorkbooks do
   begin
     cbWorkbook.Items.Add(VarToStr(WB.Name));
@@ -444,8 +462,11 @@ begin
   end;
   if cbWorkbook.Items.Count = 0 then
   begin
-    Log('Keine geoeffnete Arbeitsmappe gefunden. Hinweis: VbaSync nicht "als Administrator" ' +
-      'starten, wenn Excel normal laeuft (und umgekehrt).');
+    if VarIsEmpty(FVBE) then
+      Log('Keine geoeffnete Arbeitsmappe gefunden. Hinweis: VbaSync nicht "als Administrator" ' +
+        'starten, wenn Excel normal laeuft (und umgekehrt).')
+    else
+      Log('Keine geoeffnete Arbeitsmappe gefunden (siehe Hinweise oben).');
     Exit;
   end;
   Log(Format('%d Arbeitsmappe(n) gefunden.', [cbWorkbook.Items.Count]));
@@ -602,6 +623,18 @@ begin
     procedure(S: TVbaSync)
     begin
       S.ExportAll(Folder);
+    end);
+end;
+
+procedure TMainForm.DoCompare(Sender: TObject);
+var
+  Folder: string;
+begin
+  Folder := RequireFolder;
+  RunAction(
+    procedure(S: TVbaSync)
+    begin
+      S.CompareWithFolder(Folder);
     end);
 end;
 

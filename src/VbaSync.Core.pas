@@ -49,6 +49,7 @@ type
     FProject: OleVariant;
     FLog: TLogProc;
     FDelCounter: Integer;
+    FQuiet: Boolean;  // Log unterdruecken (Vergleichs-Export in Temp-Ordner)
     procedure Log(const Msg: string);
     function FindComponent(const AName: string; out Comp: OleVariant): Boolean;
     procedure ReplaceDocumentCode(const Comp: OleVariant; const Code: string);
@@ -73,6 +74,9 @@ type
     /// Code-Cleaner: Export in Temp-Ordner, alles entfernen, neu importieren.
     /// Gibt den Backup-Ordner zurueck.
     function Clean: string;
+    /// Vergleicht den Code der Mappe mit den Dateien im Ordner (Export in einen
+    /// Temp-Ordner, dann byteweiser Vergleich). Liefert die Anzahl der Abweichungen.
+    function CompareWithFolder(const Folder: string): Integer;
   end;
 
 function ComponentType(const Comp: OleVariant): Integer;
@@ -83,7 +87,13 @@ function OpenWorkbook(const ExcelApp: OleVariant; const Spec: string): OleVarian
 /// Liefert alle geoeffneten Arbeitsmappen ueber ALLE laufenden Excel-Instanzen.
 /// Sucht ueber die Excel-Fenster (XLMAIN/XLDESK/EXCEL7) statt GetActiveOleObject,
 /// weil Letzteres nur die erste registrierte (evtl. leere/unsichtbare) Instanz findet.
-function GetOpenWorkbooks: TArray<OleVariant>;
+/// ALog (optional) erhaelt Fehler bei einzelnen Fenstern, statt sie still zu verwerfen.
+function GetOpenWorkbooks(ALog: TLogProc = nil): TArray<OleVariant>;
+/// Add-in: liefert die Mappen der Excel-Instanz, in der die VBA-IDE laeuft.
+/// Ermittelt Excel.Application ueber ein Dokumentmodul eines VBProjects
+/// (VBComponent.Properties("Application")) und liest dann Application.Workbooks.
+/// Kein Umweg ueber Fenster, daher unabhaengig von Fensterklassen und Rechte-Level.
+function GetWorkbooksFromVBE(const VBE: OleVariant; ALog: TLogProc = nil): TArray<OleVariant>;
 
 implementation
 
@@ -105,7 +115,7 @@ begin
   Result := True;
 end;
 
-function GetOpenWorkbooks: TArray<OleVariant>;
+function GetOpenWorkbooks(ALog: TLogProc): TArray<OleVariant>;
 var
   Mains: TList<HWND>;
   Main, Desk, Child: HWND;
@@ -139,7 +149,10 @@ begin
             Result := Result + [WB];
           end;
         except
-          // Fenster ohne Zugriff (z. B. anderes Rechte-Level) ignorieren
+          // Fenster ohne Zugriff (z. B. anderes Rechte-Level) ueberspringen, aber melden
+          on E: Exception do
+            if Assigned(ALog) then
+              ALog(Format('Hinweis: Excel-Fenster $%x nicht lesbar: %s', [NativeUInt(Child), E.Message]));
         end;
         Child := FindWindowEx(Desk, Child, 'EXCEL7', nil);
       end;
@@ -150,11 +163,78 @@ begin
   end;
 end;
 
+{ "Type" und "Object" sind in Pascal reservierte Woerter -> Property-Get direkt ueber IDispatch. }
+function OleGetProp(const Obj: OleVariant; const Name: WideString): OleVariant; forward;
+
+function GetExcelFromVBE(const VBE: OleVariant; ALog: TLogProc): OleVariant;
+var
+  Projects, Proj, Comps, Comp, Prop: OleVariant;
+  I, J: Integer;
+  LastErr: string;
+begin
+  Result := Unassigned;
+  LastErr := '';
+  Projects := VBE.VBProjects;
+  for I := 1 to Integer(Projects.Count) do
+  begin
+    try
+      Proj := Projects.Item(I);
+      if Integer(Proj.Protection) = pp_Locked then Continue; // gesperrte Projekte liefern keine Komponenten
+      Comps := Proj.VBComponents;
+      for J := 1 to Integer(Comps.Count) do
+      begin
+        Comp := Comps.Item(J);
+        if Integer(OleGetProp(Comp, 'Type')) <> ct_Document then Continue; // nur Dokumentmodule
+        Prop := Comp.Properties.Item('Application');
+        try
+          Result := OleGetProp(Prop, 'Object');
+        except
+          Result := Unassigned;
+        end;
+        if VarType(Result) <> varDispatch then
+          Result := Prop.Value;
+        if VarType(Result) = varDispatch then
+          Exit;
+        Result := Unassigned;
+      end;
+    except
+      on E: Exception do
+        LastErr := E.Message;
+    end;
+  end;
+  if (LastErr <> '') and Assigned(ALog) then
+    ALog('Hinweis: Excel ueber VBE nicht vollstaendig lesbar: ' + LastErr);
+end;
+
+function GetWorkbooksFromVBE(const VBE: OleVariant; ALog: TLogProc): TArray<OleVariant>;
+var
+  XL, Books, WB: OleVariant;
+  I: Integer;
+begin
+  Result := nil;
+  XL := GetExcelFromVBE(VBE, ALog);
+  if VarIsEmpty(XL) then
+  begin
+    if Assigned(ALog) then
+      ALog('Hinweis: Excel-Application ueber VBE nicht gefunden (kein ungesperrtes Projekt mit Dokumentmodul).');
+    Exit;
+  end;
+  Books := XL.Workbooks;
+  for I := 1 to Integer(Books.Count) do
+    try
+      WB := Books.Item(I);
+      Result := Result + [WB];
+    except
+      on E: Exception do
+        if Assigned(ALog) then
+          ALog(Format('Hinweis: Arbeitsmappe %d nicht lesbar: %s', [I, E.Message]));
+    end;
+end;
+
 const
   ManagedExts: array[0..4] of string = ('.bas', '.cls', '.frm', '.frx', '.doccls');
   ImportExts:  array[0..3] of string = ('.bas', '.cls', '.frm', '.doccls');
 
-{ "Type" ist in Pascal ein reserviertes Wort, daher Property-Get direkt ueber IDispatch. }
 function OleGetProp(const Obj: OleVariant; const Name: WideString): OleVariant;
 var
   Disp: IDispatch;
@@ -295,7 +375,7 @@ end;
 
 procedure TVbaSync.Log(const Msg: string);
 begin
-  if Assigned(FLog) then
+  if Assigned(FLog) and not FQuiet then
     FLog(Msg);
 end;
 
@@ -587,6 +667,68 @@ begin
   DeleteComponents(nil, True, False);
   ImportFolder(Result, nil);
   Log('Clean abgeschlossen. Mappe jetzt speichern. Backup bleibt in ' + Result);
+end;
+
+function SameFileBytes(const A, B: string): Boolean;
+var
+  BA, BB: TBytes;
+begin
+  BA := TFile.ReadAllBytes(A);
+  BB := TFile.ReadAllBytes(B);
+  Result := (Length(BA) = Length(BB)) and
+    ((Length(BA) = 0) or CompareMem(@BA[0], @BB[0], Length(BA)));
+end;
+
+function TVbaSync.CompareWithFolder(const Folder: string): Integer;
+var
+  Tmp, F, N, Other: string;
+begin
+  if not TDirectory.Exists(Folder) then
+    raise Exception.Create('Ordner nicht gefunden: ' + Folder);
+  Tmp := TPath.Combine(TPath.GetTempPath,
+    'VbaSync_cmp_' + FormatDateTime('yyyymmdd_hhnnsszzz', Now));
+  Log('Vergleiche Mappe mit ' + Folder + ' ...');
+  FQuiet := True;
+  try
+    ExportAll(Tmp);
+  finally
+    FQuiet := False;
+  end;
+  Result := 0;
+  try
+    for F in TDirectory.GetFiles(Tmp) do
+    begin
+      N := ExtractFileName(F);
+      if not MatchText(ExtractFileExt(N), ManagedExts) then Continue;
+      Other := TPath.Combine(Folder, N);
+      if not TFile.Exists(Other) then
+      begin
+        Log('  nur in der Mappe: ' + N);
+        Inc(Result);
+      end
+      else if not SameFileBytes(F, Other) then
+      begin
+        Log('  abweichend:       ' + N);
+        Inc(Result);
+      end;
+    end;
+    for F in TDirectory.GetFiles(Folder) do
+    begin
+      N := ExtractFileName(F);
+      if MatchText(ExtractFileExt(N), ManagedExts) and
+         not TFile.Exists(TPath.Combine(Tmp, N)) then
+      begin
+        Log('  nur im Ordner:    ' + N);
+        Inc(Result);
+      end;
+    end;
+  finally
+    TDirectory.Delete(Tmp, True);
+  end;
+  if Result = 0 then
+    Log('Vergleich: Mappe und Ordner sind identisch.')
+  else
+    Log(Format('Vergleich: %d Abweichung(en).', [Result]));
 end;
 
 end.

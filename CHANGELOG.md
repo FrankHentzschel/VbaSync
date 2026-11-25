@@ -2,6 +2,15 @@
 
 Schema: MAJOR.MINOR.PATCH. PATCH = Fehlerbehebung, MINOR = neue Funktion.
 
+## 1.8.1 – 25.11.2026 10:05
+- Fix Add-in: „Keine geoeffnete Arbeitsmappe gefunden“, obwohl Mappen offen sind. Das Add-in ermittelt die Mappen jetzt direkt über die VBA-IDE (`VBComponent.Properties("Application")` → `Application.Workbooks`) statt über die Excel-Fenster; die Fenstersuche bleibt für die EXE und als Rückfall
+- Fehler beim Lesen einzelner Excel-Fenster/Mappen werden im Protokoll gemeldet statt still verworfen
+- Admin-Hinweis erscheint nur noch in der EXE
+
+## 1.8.0 – 06.11.2026 00:50
+- Neu: „Mit Ordner vergleichen“ (GUI) bzw. `vbasync compare` (Kommandozeile): zeigt, welche Module von den Dateien im Ordner abweichen oder nur auf einer Seite vorhanden sind
+- README: „Bekannte Grenzen“ aktualisiert
+
 ## 1.7.1 – 06.11.2026 00:20
 - Fix Add-in: Name im Add-In-Manager ohne Versionsnummer (zeigte sonst die Version der letzten Registrierung)
 

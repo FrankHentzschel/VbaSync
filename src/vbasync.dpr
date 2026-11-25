@@ -16,6 +16,7 @@ begin
   Writeln;
   Writeln('  vbasync list   <Mappe>');
   Writeln('  vbasync export <Mappe> <Ordner>');
+  Writeln('  vbasync compare <Mappe> <Ordner>   (ExitCode 2 bei Abweichungen)');
   Writeln('  vbasync import <Mappe> <Ordner> [Modul ...]');
   Writeln('  vbasync delete <Mappe> (--all | Modul ...) [--clear-docs]');
   Writeln('  vbasync clean  <Mappe>');
@@ -75,6 +76,12 @@ begin
         begin
           if ParamCount < 3 then raise Exception.Create('Zielordner fehlt.');
           Sync.ExportAll(ExpandFileName(ParamStr(3)));
+        end
+        else if Cmd = 'compare' then
+        begin
+          if ParamCount < 3 then raise Exception.Create('Ordner fehlt.');
+          if Sync.CompareWithFolder(ExpandFileName(ParamStr(3))) > 0 then
+            ExitCode := 2;
         end
         else if Cmd = 'import' then
         begin
